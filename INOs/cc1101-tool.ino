@@ -13,36 +13,32 @@
 // Also uses Arduino Command Line interpreter by Edgar Bonet
 // from https://gist.github.com/edgar-bonet/607b387260388be77e96
 //
-// This code will ONLY work with ESP32 board
+// This code will ONLY work with Arduino Pro Micro 3.3V 8MHz
 //
 
 #include <ELECHOUSE_CC1101_SRC_DRV.h>
+#include <avr/pgmspace.h>
 #include <EEPROM.h>
 #include <SPI.h>
 
 #define CCBUFFERSIZE 64
-#define RECORDINGBUFFERSIZE 4096   // Buffer for recording the frames
-#define EPROMSIZE 512              // Size of EEPROM in your Arduino chip. For ESP32 it is Flash simulated so very slow
+#define RECORDINGBUFFERSIZE 1536   // Buffer for recording the frames
+#define EPROMSIZE 1024             // Size of EEPROM in your Arduino chip
 #define BUF_LENGTH 128             // Buffer for the incoming command.
 
-// defining PINs set for ESP32 module
-// Example for XIAO ESP32 C3
-/* byte sck = 8;
-byte miso = 4;
-byte mosi = 10;
-byte ss = 20;
-int gdo0 = 21;
-int gdo2 = 7; */
+// Following section enables SmartRC CC1101 library 
+// to work with Arduino Pro Micro
+// if using different board, please change it to your board assignments
+// defining PINs set for Arduino Pro Micro setup
+byte sck = 15;   
+byte miso = 14;
+byte mosi = 16;
+byte ss = 10;
+int gdo0 = 3;
+int gdo2 = 9;
 
-// defining PINs set for ESP32 WROOM module
-
-byte sck = 18;     //  GPIO 18
-byte miso = 19;    //  GPIO 19
-byte mosi = 23;    //  GPIO 23
-byte ss = 5;       //  GPIO 5
-int gdo0 = 2;      //  GPIO 2
-int gdo2 = 4;      //  GPIO 4
-
+// The RX LED has a defined Arduino Pro Micro pin
+int RXLED = 17; 
 
 // position in big recording buffer
 int bigrecordingbufferpos = 0; 
@@ -69,18 +65,16 @@ byte ccreceivingbuffer[CCBUFFERSIZE] = {0};
 
 // buffer for sending  CC1101
 byte ccsendingbuffer[CCBUFFERSIZE] = {0};
-//char ccsendingbuffer[CCBUFFERSIZE] = {0};
 
 // buffer for recording and replaying of many frames
 byte bigrecordingbuffer[RECORDINGBUFFERSIZE] = {0};
 
 // buffer for hex to ascii conversions 
 byte textbuffer[BUF_LENGTH];
-//char textbuffer[BUF_LENGTH];
 
 
 
-// convert bytes in table to string with hex numbers
+// convert char table to string with hex numbers
 void asciitohex(byte *ascii_ptr, byte *hex_ptr,int len)
 {
     byte i,j,k;
@@ -106,7 +100,7 @@ void asciitohex(byte *ascii_ptr, byte *hex_ptr,int len)
 
 
 // convert string with hex numbers to array of bytes
- void  hextoascii(byte *ascii_ptr, byte *hex_ptr,int len)
+void  hextoascii(byte *ascii_ptr, byte *hex_ptr,int len)
 {
     byte i,j;
     for(i = 0; i < (len/2); i++)
@@ -140,7 +134,7 @@ static void cc1101initialize(void)
     ELECHOUSE_cc1101.setChannel(0);         // Set the Channelnumber from 0 to 255. Default is cahnnel 0.
     ELECHOUSE_cc1101.setChsp(199.95);       // The channel spacing is multiplied by the channel number CHAN and added to the base frequency in kHz. Value from 25.39 to 405.45. Default is 199.95 kHz.
     ELECHOUSE_cc1101.setRxBW(812.50);       // Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
-    ELECHOUSE_cc1101.setDRate(9.6);         // Set the Data Rate in kBaud. Value from 0.02 to 1621.83. Default is 99.97 kBaud!
+    ELECHOUSE_cc1101.setDRate(9.6);         // Set the Data Rate in kBaud. Value from 0.02 to 1621.83. 
     ELECHOUSE_cc1101.setPA(10);             // Set TxPower. The following settings are possible depending on the frequency band.  (-30  -20  -15  -10  -6    0    5    7    10   11   12) Default is max!
     ELECHOUSE_cc1101.setSyncMode(2);        // Combined sync-word qualifier mode. 0 = No preamble/sync. 1 = 16 sync word bits detected. 2 = 16/16 sync word bits detected. 3 = 30/32 sync word bits detected. 4 = No preamble/sync, carrier-sense above threshold. 5 = 15/16 + carrier-sense above threshold. 6 = 16/16 + carrier-sense above threshold. 7 = 30/32 + carrier-sense above threshold.
     ELECHOUSE_cc1101.setSyncWord(211, 145); // Set sync word. Must be the same for the transmitter and receiver. Default is 211,145 (Syncword high, Syncword low)
@@ -177,7 +171,7 @@ static void exec(char *cmdline)
     long compare_freq;
     float mark_freq;
     int rssi;
-    int mark_rssi=-100; 
+    int mark_rssi=-100;    
     
   // identification of the command & actions
       
@@ -185,11 +179,11 @@ static void exec(char *cmdline)
         Serial.println(F(
           "setmodulation <mode> : Set modulation mode. 0 = 2-FSK, 1 = GFSK, 2 = ASK/OOK, 3 = 4-FSK, 4 = MSK.\r\n\r\n"
           "setmhz <frequency>   : Here you can set your basic frequency. default = 433.92).The cc1101 can: 300-348 MHZ, 387-464MHZ and 779-928MHZ.\r\n\r\n"
-          "setdeviation <deviation> : Set the Frequency deviation in kHz. Value from 1.58 to 380.85.\r\n\r\n"
+          "setdeviation <deviation> : Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.\r\n\r\n"
           "setchannel <channel> : Set the Channelnumber from 0 to 255. Default is cahnnel 0.\r\n\r\n"
-          "setchsp <spacing>  :  The channel spacing is multiplied by the channel number CHAN and added to the base frequency in kHz. Value from 25.39 to 405.45. \r\n\r\n"
-          "setrxbw <Receive bndwth> : Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. \r\n\r\n"
-          "setdrate <datarate> : Set the Data Rate in kBaud. Value from 0.02 to 1621.83.\r\n\r\n"
+          "setchsp <spacing>  :  The channel spacing is multiplied by the channel number CHAN and added to the base frequency in kHz. Value from 25.39 to 405.45. Default is 199.95 kHz. \r\n\r\n"
+          "setrxbw <Receive bndwth> : Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.\r\n"
+          "setdrate <datarate> : Set the Data Rate in kBaud. Value from 0.02 to 1621.83. Default is 99.97 kBaud!\r\n\r\n"
           "setpa <power value> : Set RF transmission power. The following settings are possible depending on the frequency band.  (-30  -20  -15  -10  -6    0    5    7    10   11   12) Default is max!\r\n\r\n"
           "setsyncmode  <sync mode> : Combined sync-word qualifier mode. 0 = No preamble/sync. 1 = 16 sync word bits detected. 2 = 16/16 sync word bits detected. 3 = 30/32 sync word bits detected. 4 = No preamble/sync, carrier-sense above threshold. 5 = 15/16 + carrier-sense above threshold. 6 = 16/16 + carrier-sense above threshold. 7 = 30/32 + carrier-sense above threshold.\r\n"
          ));
@@ -219,7 +213,7 @@ static void exec(char *cmdline)
           "rx : Sniffer. Enable or disable printing of received RF packets on serial terminal.\r\n\r\n"
           "tx <hex-vals> : Send packet of max 60 bytes <hex values> over RF\r\n\r\n"
           "jam : Enable or disable continous jamming on selected band.\r\n\r\n"
-          "brute <microseconds> <number-of-bits> : Brute force garage gate with <nb-of-bits> keyword where symbol time is <usec>.\r\n\r\n"            
+          "brute <microseconds> <number-of-bits> : Brute force garage gate with <nb-of-bits> keyword where symbol time is <usec>.\r\n\r\n"
           "rec : Enable or disable recording frames in the buffer.\r\n\r\n"
           "add <hex-vals> : Manually add single frame payload (max 64 hex values) to the buffer so it can be replayed\r\n\r\n"
           "show : Show content of recording buffer\r\n\r\n"
@@ -476,102 +470,6 @@ static void exec(char *cmdline)
         Serial.println(ELECHOUSE_cc1101.getLqi());        
         Serial.print(F("\r\n")); 
 
-
-    // Handling SCAN command - frequency scanner by Little S@tan !
-    } else if (strcmp_P(command, PSTR("scan")) == 0) {
-        settingf1 = atof(strsep(&cmdline, " "));
-        settingf2 = atof(cmdline);
-        Serial.print(F("\r\nScanning frequency range from : "));
-        Serial.print(settingf1);
-        Serial.print(F(" MHz to "));
-        Serial.print(settingf2);
-        Serial.print(F(" MHz, press any key for stop or wait...\r\n"));  
-        // initialize parameters for scanning
-        ELECHOUSE_cc1101.Init();
-        ELECHOUSE_cc1101.setRxBW(58);
-        ELECHOUSE_cc1101.SetRx();
-        // Do scanning until some key pressed
-        freq = settingf1;  // start frequency for scanning
-        mark_rssi=-100;   
-        while (!Serial.available())        
-          {
-            ELECHOUSE_cc1101.setMHZ(freq);
-            rssi = ELECHOUSE_cc1101.getRssi();
-            if (rssi>-75)
-               {
-                    if (rssi > mark_rssi)
-                    {
-                          mark_rssi = rssi;  
-                          mark_freq = freq;
-                    };
-              };
-
-           freq+=0.01;
-
-           if (freq > settingf2)
-              {
-                   freq = settingf1;
-
-                   if (mark_rssi>-75)
-                    {
-                      long fr = mark_freq*100;
-                      if (fr == compare_freq)
-                          {
-                            Serial.print(F("\r\nSignal found at  "));
-                            Serial.print(F("Freq: "));
-                            Serial.print(mark_freq);
-                            Serial.print(F(" Rssi: "));
-                            Serial.println(mark_rssi);
-                            mark_rssi=-100;
-                            compare_freq = 0;
-                            mark_freq = 0;
-                          }
-                      else
-                          {
-                            compare_freq = mark_freq*100;
-                            freq = mark_freq -0.10;
-                            mark_freq=0;
-                            mark_rssi=-100;
-                          };
-                    };
-                    
-              }; // end of IF freq>stop frequency 
-              
-          };  // End of While 
-
-
-    // handling SAVE command
-    } else if (strcmp_P(command, PSTR("save")) == 0) {
-        //start saving recording buffer content into EEPROM non-volatile memory 
-        Serial.print(F("\r\nSaving recording buffer content into the non-volatile memory...\r\n"));
-        
-        for (setting=0; setting<EPROMSIZE ; setting++)  
-           {  // copying byte after byte from SRAM to EEPROM
-            EEPROM.write(setting, bigrecordingbuffer[setting] );
-           };
-        // following command is required for ESP32
-        EEPROM.commit();      
-        // print confirmation
-        Serial.print(F("\r\nSaving complete.\r\n\r\n"));
-                 
-    // handling LOAD command
-    } else if (strcmp_P(command, PSTR("load")) == 0) {     
-         // first flushing bigrecordingbuffer with zeros and rewinding all the pointers 
-        for (setting = 0; setting<RECORDINGBUFFERSIZE; setting++)  bigrecordingbuffer[setting] = 0;  
-        // and rewinding all the pointers to the recording buffer
-        bigrecordingbufferpos = 0;
-        framesinbigrecordingbuffer = 0;     
-        //start loading EEPROM non-volatile memory content into recording buffer
-        Serial.print(F("\r\nLoading content from the non-volatile memory into the recording buffer...\r\n"));
-        
-        for (setting=0; setting<EPROMSIZE ; setting++)  
-           { // copying byte after byte from EEPROM to SRAM 
-            bigrecordingbuffer[setting] = EEPROM.read(setting);
-           }
-        Serial.print(F("\r\nLoading complete. Enter 'show' or 'showraw' to see the buffer content.\r\n\r\n"));
-                  
-
-
     // Handling RX command         
        } else if (strcmp_P(command, PSTR("rx")) == 0) {
         Serial.print(F("\r\nReceiving and printing RF packet changed to "));
@@ -649,30 +547,37 @@ static void exec(char *cmdline)
              // checking if key pressed
              if (Serial.available()) break;
            };
+
         Serial.print(F("\r\nBrute forcing complete.\r\n\r\n"));
-            
+        
         // setting normal pkt format again
         ELECHOUSE_cc1101.setCCMode(1); 
         ELECHOUSE_cc1101.setPktFormat(0);
         ELECHOUSE_cc1101.SetTx();
         // pinMode(gdo0pin, INPUT);
-        } // end of IF        
+        } // end of IF
+        
         else { Serial.print(F("Wrong parameters.\r\n")); };
-         
+
+ 
 
     // Handling TX command         
        } else if (strcmp_P(command, PSTR("tx")) == 0) {
         // convert hex array to set of bytes
         if ((strlen(cmdline)<=120) && (strlen(cmdline)>0) )
         { 
-                hextoascii(textbuffer,(byte *)cmdline, strlen(cmdline));        
+                hextoascii((byte *)textbuffer, cmdline, strlen(cmdline));        
                 memcpy(ccsendingbuffer, textbuffer, strlen(cmdline)/2 );
                 ccsendingbuffer[strlen(cmdline)/2] = 0x00;       
                 Serial.print("\r\nTransmitting RF packets.\r\n");
+                // blink LED RX - only for Arduino Pro Micro
+                digitalWrite(RXLED, LOW);   // set the RX LED ON
                 // send these data to radio over CC1101
                 ELECHOUSE_cc1101.SendData(ccsendingbuffer, (byte)(strlen(cmdline)/2));
+                // blink LED RX - only for Arduino Pro Micro
+                digitalWrite(RXLED, HIGH);   // set the RX LED OFF    
                 // for DEBUG only
-                asciitohex(ccsendingbuffer, textbuffer,  strlen(cmdline)/2 );
+                asciitohex((byte *)ccsendingbuffer, (byte *)textbuffer,  strlen(cmdline)/2 );
                 Serial.print(F("Sent frame: "));
                 Serial.print((char *)textbuffer);
                 Serial.print(F("\r\n")); }
@@ -690,25 +595,16 @@ static void exec(char *cmdline)
         ELECHOUSE_cc1101.setCCMode(0); 
         ELECHOUSE_cc1101.setPktFormat(3);
         ELECHOUSE_cc1101.SetRx();
-
-
+        
         //start recording to the buffer with bitbanging of GDO0 pin state
         Serial.print(F("\r\nWaiting for radio signal to start RAW recording...\r\n"));
         pinMode(gdo0, INPUT);
 
-        // this is only for ESP32 boards because they are getting some noise on the beginning
-        setting2 = digitalRead(gdo0);
-        delayMicroseconds(1000);  
-
-
         // waiting for some data first or serial port signal
-        //while (!Serial.available() ||  (digitalRead(gdo0) == LOW) ); 
+        // while (!Serial.available() ||  (digitalRead(gdo0) == LOW) ); 
         while ( digitalRead(gdo0) == LOW ); 
 
-        
-        //start recording to the buffer with bitbanging of GDO0 pin state
-        Serial.print(F("\r\nStarting RAW recording to the buffer...\r\n"));
-
+        // start capturing
         for (int i=0; i<RECORDINGBUFFERSIZE ; i++)  
            { 
              byte receivedbyte = 0;
@@ -741,13 +637,13 @@ static void exec(char *cmdline)
         //start recording to the buffer with bitbanging of GDO0 pin state
         Serial.print(F("\r\nSniffer enabled...\r\n"));
         pinMode(gdo0, INPUT);
-
-        
-        
+            
        // Any received char over Serial port stops printing  RF received bytes
         while (!Serial.available()) 
            {  
-             
+             // blink LED RX - only for Arduino Pro Micro
+             digitalWrite(RXLED, LOW);   // set the RX LED ON
+  
              // we have to use the buffer not to introduce delays
              for (int i=0; i<RECORDINGBUFFERSIZE ; i++)  
                 { 
@@ -763,11 +659,13 @@ static void exec(char *cmdline)
              // when buffer full print the ouptput to serial port
              for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)  
                     { 
-                       asciitohex(&bigrecordingbuffer[i], textbuffer,  32);
+                       asciitohex((byte *)&bigrecordingbuffer[i], (byte *)textbuffer,  32);
                        Serial.print((char *)textbuffer);
                     };
                     
-            
+            // blink LED RX - only for Arduino Pro Micro
+            digitalWrite(RXLED, HIGH);   // set the RX LED OFF
+  
            }; // end of While loop
            
         Serial.print(F("\r\nStopping the sniffer.\n\r\n"));
@@ -795,6 +693,8 @@ static void exec(char *cmdline)
         Serial.print(F("\r\nReplaying RAW data from the buffer...\r\n"));
         pinMode(gdo0, OUTPUT);
 
+        // blink LED RX - only for Arduino Pro Micro
+        digitalWrite(RXLED, LOW);   // set the RX LED ON
         
         for (int i=1; i<RECORDINGBUFFERSIZE ; i++)  
            { 
@@ -806,6 +706,8 @@ static void exec(char *cmdline)
                }; 
            }
 
+        // blink LED RX - only for Arduino Pro Micro
+        digitalWrite(RXLED, HIGH);   // set the RX LED OFF
         
         Serial.print(F("\r\nReplaying RAW data complete.\r\n\r\n"));
         // setting normal pkt format again
@@ -816,13 +718,14 @@ static void exec(char *cmdline)
         }
         else { Serial.print(F("Wrong parameters.\r\n")); };
 
+
     // handling SHOWRAW command
     } else if (strcmp_P(command, PSTR("showraw")) == 0) {
     // show the content of recorded RAW signal as hex numbers
        Serial.print(F("\r\nRecorded RAW data:\r\n"));
        for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)  
            { 
-                    asciitohex(&bigrecordingbuffer[i], textbuffer,  32);
+                    asciitohex((byte *)&bigrecordingbuffer[i], (byte *)textbuffer,  32);
                     Serial.print((char *)textbuffer);
            }
        Serial.print(F("\r\n\r\n"));
@@ -913,7 +816,6 @@ static void exec(char *cmdline)
               Serial.print(F("\r\n\r\n"));
 
 
-
     // Handling ADDRAW command         
        } else if (strcmp_P(command, PSTR("addraw")) == 0) {
         // getting hex numbers - the content of the  frame 
@@ -922,7 +824,7 @@ static void exec(char *cmdline)
         if ((len<=120) && (len>0) )
         { 
                 // convert the hex content to array of bytes
-                hextoascii(textbuffer, (byte *)cmdline, len);        
+                hextoascii((byte *)textbuffer, cmdline, len);        
                 len = len /2;
                 // check if the frame fits into the buffer and store it
                 if (( bigrecordingbufferpos + len) < RECORDINGBUFFERSIZE) 
@@ -938,6 +840,7 @@ static void exec(char *cmdline)
                    };
         }  
         else { Serial.print(F("Wrong parameters.\r\n")); };
+
 
 
 
@@ -964,7 +867,7 @@ static void exec(char *cmdline)
                framesinbigrecordingbuffer = 0;
                };
         Serial.print(F("\r\n")); 
- 
+
 
     // Handling PLAY command         
        } else if (strcmp_P(command, PSTR("play")) == 0) {
@@ -977,6 +880,8 @@ static void exec(char *cmdline)
           bigrecordingbufferpos = 0;
           if (framesinbigrecordingbuffer >0)
           {
+            // blink LED RX - only for Arduino Pro Micro
+            digitalWrite(RXLED, LOW);   // set the RX LED ON
 
             // start reading and sending frames from the buffer : FIFO
             for (int i=1; i<=framesinbigrecordingbuffer ; i++)  
@@ -995,7 +900,9 @@ static void exec(char *cmdline)
                   if ( bigrecordingbufferpos > RECORDINGBUFFERSIZE) break;
                  // 
                };
-             }; // end of IF framesinrecordingbuffer  
+            // blink LED RX - only for Arduino Pro Micro
+            digitalWrite(RXLED, HIGH);   // set the RX LED OFF   
+          }; // end of IF framesinrecordingbuffer  
         
           // rewind buffer position
           bigrecordingbufferpos = 0;
@@ -1012,7 +919,7 @@ static void exec(char *cmdline)
         if ((len<=120) && (len>0) )
         { 
                 // convert the hex content to array of bytes
-                hextoascii(textbuffer,(byte *)cmdline, len);        
+                hextoascii((byte *)textbuffer, cmdline, len);        
                 len = len /2;
                 // check if the frame fits into the buffer and store it
                 if (( bigrecordingbufferpos + len + 1) < RECORDINGBUFFERSIZE) 
@@ -1056,7 +963,7 @@ static void exec(char *cmdline)
                     // flush textbuffer
                     for (setting2 = 0; setting2 < BUF_LENGTH; setting2++)
                         { textbuffer[setting2] = 0; };           
-                    asciitohex(&bigrecordingbuffer[bigrecordingbufferpos + 1], textbuffer,  len);
+                    asciitohex((byte *)&bigrecordingbuffer[bigrecordingbufferpos + 1], (byte *)textbuffer,  len);
                     Serial.print(F("\r\nFrame "));
                     Serial.print(setting);
                     Serial.print(F(" : "));                     
@@ -1084,6 +991,99 @@ static void exec(char *cmdline)
         framesinbigrecordingbuffer = 0;
         Serial.print(F("\r\nRecording buffer cleared.\r\n"));
           
+
+    // Handling SCAN command - frequency scanner by Little S@tan !
+    } else if (strcmp_P(command, PSTR("scan")) == 0) {
+        settingf1 = atof(strsep(&cmdline, " "));
+        settingf2 = atof(cmdline);
+        Serial.print(F("\r\nScanning frequency range from : "));
+        Serial.print(settingf1);
+        Serial.print(F(" MHz to "));
+        Serial.print(settingf2);
+        Serial.print(F(" MHz, press any key for stop or wait...\r\n"));  
+        // initialize parameters for scanning
+        ELECHOUSE_cc1101.Init();
+        ELECHOUSE_cc1101.setRxBW(58);
+        ELECHOUSE_cc1101.SetRx();
+        // Do scanning until some key pressed
+        freq = settingf1;  // start frequency for scanning
+        mark_rssi=-100;   
+        while (!Serial.available())        
+          {
+            ELECHOUSE_cc1101.setMHZ(freq);
+            rssi = ELECHOUSE_cc1101.getRssi();
+            if (rssi>-75)
+               {
+                    if (rssi > mark_rssi)
+                    {
+                          mark_rssi = rssi;  
+                          mark_freq = freq;
+                    };
+              };
+
+           freq+=0.01;
+
+           if (freq > settingf2)
+              {
+                   freq = settingf1;
+
+                   if (mark_rssi>-75)
+                    {
+                      long fr = mark_freq*100;
+                      if (fr == compare_freq)
+                          {
+                            Serial.print(F("\r\nSignal found at  "));
+                            Serial.print(F("Freq: "));
+                            Serial.print(mark_freq);
+                            Serial.print(F(" Rssi: "));
+                            Serial.println(mark_rssi);
+                            mark_rssi=-100;
+                            compare_freq = 0;
+                            mark_freq = 0;
+                          }
+                      else
+                          {
+                            compare_freq = mark_freq*100;
+                            freq = mark_freq -0.10;
+                            mark_freq=0;
+                            mark_rssi=-100;
+                          };
+                    };
+                    
+              }; // end of IF freq>stop frequency 
+              
+          };  // End of While 
+
+
+    // handling SAVE command
+    } else if (strcmp_P(command, PSTR("save")) == 0) {
+        //start saving recording buffer content into EEPROM non-volatile memory 
+        Serial.print(F("\r\nSaving recording buffer content into the non-volatile memory...\r\n"));
+        
+        for (setting=0; setting<EPROMSIZE ; setting++)  
+           {  // copying byte after byte from SRAM to EEPROM
+            EEPROM.write(setting, bigrecordingbuffer[setting] );
+           }
+        Serial.print(F("\r\nSaving complete.\r\n\r\n"));
+                 
+    // handling LOAD command
+    } else if (strcmp_P(command, PSTR("load")) == 0) {     
+         // first flushing bigrecordingbuffer with zeros and rewinding all the pointers 
+        for (setting = 0; setting<RECORDINGBUFFERSIZE; setting++)  bigrecordingbuffer[setting] = 0;  
+        // and rewinding all the pointers to the recording buffer
+        bigrecordingbufferpos = 0;
+        framesinbigrecordingbuffer = 0;     
+        //start loading EEPROM non-volatile memory content into recording buffer
+        Serial.print(F("\r\nLoading content from the non-volatile memory into the recording buffer...\r\n"));
+        
+        for (setting=0; setting<EPROMSIZE ; setting++)  
+           { // copying byte after byte from EEPROM to SRAM 
+            bigrecordingbuffer[setting] = EEPROM.read(setting);
+           }
+        Serial.print(F("\r\nLoading complete. Enter 'show' or 'showraw' to see the buffer content.\r\n\r\n"));
+                  
+
+
        
     // Handling ECHO command         
     } else if (strcmp_P(command, PSTR("echo")) == 0) {
@@ -1122,15 +1122,17 @@ void setup() {
      // initialize USB Serial Port CDC
      Serial.begin(115200);
 
-    //Init EEPROM - for ESP32 based boards only
-     EEPROM.begin(EPROMSIZE);     
-
+     while (!Serial) {
+        ; // wait until USB CDC port connects... Needed for Leonardo only
+                     }
      Serial.println(F("CC1101 terminal tool connected, use 'help' for list of commands...\n\r"));
      Serial.println(F("(C) Adam Loboda 2023\n\r  "));
 
      Serial.println();  // print CRLF
 
-    
+     // Arduino Pro Micro - RXLED diode will be used for debug blinking
+     pinMode(RXLED, OUTPUT);  // Set RX LED as an output
+
      // initialize CC1101 module with preffered parameters
      cc1101initialize();
 
@@ -1138,9 +1140,9 @@ void setup() {
       Serial.println(F("cc1101 initialized. Connection OK\n\r"));
       } else {
       Serial.println(F("cc1101 connection error! check the wiring.\n\r"));
-      };
-
-      // setup variables
+      };    
+    
+     // setup variables
      bigrecordingbufferpos = 0;
 }
 
@@ -1158,6 +1160,8 @@ void loop() {
     // handling CHAT MODE     
     if (chatmode == 1) 
        { 
+            // blink LED RX - only for Arduino Pro Micro
+            digitalWrite(RXLED, LOW);   // set the RX LED ON
             
             // clear serial port buffer index
             i = 0;
@@ -1188,8 +1192,10 @@ void loop() {
             ccsendingbuffer[i] = '\0';
 
             // send these data to radio over CC1101
-            ELECHOUSE_cc1101.SendData((char *)ccsendingbuffer);
+            ELECHOUSE_cc1101.SendData(ccsendingbuffer);
 
+            // blink LED RX - only for Arduino Pro Micro
+            digitalWrite(RXLED, HIGH);   // set the RX LED OFF
                 
        }
     // handling CLI commands processing
@@ -1222,6 +1228,8 @@ void loop() {
    //Checks whether something has been received.
   if (ELECHOUSE_cc1101.CheckReceiveFlag() && (receivingmode == 1 || recordingmode == 1 || chatmode == 1) )
       {
+       // blink LED RX - only for Arduino Pro Micro
+       digitalWrite(RXLED, LOW);   // set the RX LED ON
 
        //CRC Check. If "setCrc(false)" crc returns always OK!
        if (ELECHOUSE_cc1101.CheckCRC())
@@ -1249,8 +1257,7 @@ void loop() {
                    
                    //Print received packet as set of hex values directly 
                    // not to loose any data in buffer
-                   // asciitohex((byte *)ccreceivingbuffer, (byte *)textbuffer,  len);
-                   asciitohex(ccreceivingbuffer, textbuffer,  len);
+                   asciitohex((byte *)ccreceivingbuffer, (byte *)textbuffer,  len);
                    Serial.print((char *)textbuffer);
                    // set RX  mode again
                    ELECHOUSE_cc1101.SetRx();
@@ -1286,6 +1293,8 @@ void loop() {
  
           };   // end of CRC check IF
 
+       // blink LED RX - only for Arduino Pro Micro
+       digitalWrite(RXLED, HIGH);   // set the RX LED OFF
 
       };   // end of Check receive flag if
 
@@ -1296,8 +1305,12 @@ void loop() {
         randomSeed(analogRead(0));
         for (i = 0; i<60; i++)
            { ccsendingbuffer[i] = (byte)random(255);  };        
+        // blink LED RX - only for Arduino Pro Micro
+        digitalWrite(RXLED, LOW);   // set the RX LED ON
         // send these data to radio over CC1101
         ELECHOUSE_cc1101.SendData(ccsendingbuffer,60);
+        // blink LED RX - only for Arduino Pro Micro
+        digitalWrite(RXLED, HIGH);   // set the RX LED OFF    
       };
  
 }  // end of main LOOP
