@@ -16,6 +16,9 @@
 // This code will ONLY work with ESP32 board
 //
 
+#include <M5Unified.h>
+#include <_m5Core2-only.h>
+
 #include <ELECHOUSE_CC1101_SRC_DRV.h>
 #include <EEPROM.h>
 #include <SPI.h>
@@ -23,25 +26,30 @@
 #define CCBUFFERSIZE 64
 #define RECORDINGBUFFERSIZE 4096   // Buffer for recording the frames
 #define EPROMSIZE 512              // Size of EEPROM in your Arduino chip. For ESP32 it is Flash simulated so very slow
-#define BUF_LENGTH 128             // Buffer for the incoming command.
+#define BUF_LENGTH 128             // Buffer for the incoming command.U
+#define DEFAULT_FREQ 903.00        // 433.92
 
-// defining PINs set for ESP32 module
-// Example for XIAO ESP32 C3
-/* byte sck = 8;
-byte miso = 4;
-byte mosi = 10;
-byte ss = 20;
-int gdo0 = 21;
-int gdo2 = 7; */
 
-// defining PINs set for ESP32 WROOM module
+#if defined(ARDUINO_M5STACK_CORE2)
+    byte sck  = 18;    //  GPIO 18
+    byte miso = 38;    //  GPIO 38
+    byte mosi = 23;    //  GPIO 23
+    byte ss = 27;      //  GPIO 27
+    int gdo0 = 19;     //  GPIO 19
+    int gdo2 = 35;     //  GPIO 35
 
-byte sck = 18;     //  GPIO 18
-byte miso = 19;    //  GPIO 19
-byte mosi = 23;    //  GPIO 23
-byte ss = 5;       //  GPIO 5
-int gdo0 = 2;      //  GPIO 2
-int gdo2 = 4;      //  GPIO 4
+	#include <M5Unified.h>    
+	#define START _setup_M5()
+    #define LOOP  _loop_M5()
+
+#else
+#error "SPI not defined for this processor yet"
+#endif
+
+#if !defined(START)
+#define START
+#define LOOP
+#endif
 
 
 // position in big recording buffer
@@ -135,13 +143,13 @@ static void cc1101initialize(void)
     ELECHOUSE_cc1101.setGDO0(gdo0);         // set lib internal gdo pin (gdo0). Gdo2 not use for this example.
     ELECHOUSE_cc1101.setCCMode(1);          // set config for internal transmission mode. value 0 is for RAW recording/replaying
     ELECHOUSE_cc1101.setModulation(2);      // set modulation mode. 0 = 2-FSK, 1 = GFSK, 2 = ASK/OOK, 3 = 4-FSK, 4 = MSK.
-    ELECHOUSE_cc1101.setMHZ(433.92);        // Here you can set your basic frequency. The lib calculates the frequency automatically (default = 433.92).The cc1101 can: 300-348 MHZ, 387-464MHZ and 779-928MHZ. Read More info from datasheet.
+    ELECHOUSE_cc1101.setMHZ(DEFAULT_FREQ);  // Here you can set your basic frequency. The lib calculates the frequency automatically (default = 433.92).The cc1101 can: 300-348 MHZ, 387-464MHZ and 779-928MHZ. Read More info from datasheet.
     ELECHOUSE_cc1101.setDeviation(47.60);   // Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.
     ELECHOUSE_cc1101.setChannel(0);         // Set the Channelnumber from 0 to 255. Default is cahnnel 0.
     ELECHOUSE_cc1101.setChsp(199.95);       // The channel spacing is multiplied by the channel number CHAN and added to the base frequency in kHz. Value from 25.39 to 405.45. Default is 199.95 kHz.
     ELECHOUSE_cc1101.setRxBW(812.50);       // Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
     ELECHOUSE_cc1101.setDRate(9.6);         // Set the Data Rate in kBaud. Value from 0.02 to 1621.83. Default is 99.97 kBaud!
-    ELECHOUSE_cc1101.setPA(10);             // Set TxPower. The following settings are possible depending on the frequency band.  (-30  -20  -15  -10  -6    0    5    7    10   11   12) Default is max!
+    ELECHOUSE_cc1101.setPA(0);              // Set TxPower. The following settings are possible depending on the frequency band.  (-30  -20  -15  -10  -6    0    5    7    10   11   12) Default is max!
     ELECHOUSE_cc1101.setSyncMode(2);        // Combined sync-word qualifier mode. 0 = No preamble/sync. 1 = 16 sync word bits detected. 2 = 16/16 sync word bits detected. 3 = 30/32 sync word bits detected. 4 = No preamble/sync, carrier-sense above threshold. 5 = 15/16 + carrier-sense above threshold. 6 = 16/16 + carrier-sense above threshold. 7 = 30/32 + carrier-sense above threshold.
     ELECHOUSE_cc1101.setSyncWord(211, 145); // Set sync word. Must be the same for the transmitter and receiver. Default is 211,145 (Syncword high, Syncword low)
     ELECHOUSE_cc1101.setAdrChk(0);          // Controls address check configuration of received packages. 0 = No address check. 1 = Address check, no broadcast. 2 = Address check and 0 (0x00) broadcast. 3 = Address check and 0 (0x00) and 255 (0xFF) broadcast.
@@ -1119,8 +1127,19 @@ static void exec(char *cmdline)
 
 void setup() {
 
+	 START;
      // initialize USB Serial Port CDC
      Serial.begin(115200);
+
+	Serial.print("MOSI: ");
+	Serial.println(MOSI);
+	Serial.print("MISO: ");
+	Serial.println(MISO);
+	Serial.print("SCK: ");
+	Serial.println(SCK);
+	Serial.print("SS: ");
+	Serial.println(SS); 
+
 
     //Init EEPROM - for ESP32 based boards only
      EEPROM.begin(EPROMSIZE);     
