@@ -180,7 +180,7 @@ void ELECHOUSE_CC1101::SpiWriteReg(byte addr, byte value)
 {
   SpiStart();
   digitalWrite(SS_PIN, LOW);
-  while(digitalRead(MISO_PIN));
+  // NO ! while(digitalRead(MISO_PIN));
   SPI.transfer(addr);
   SPI.transfer(value); 
   digitalWrite(SS_PIN, HIGH);
@@ -198,7 +198,9 @@ void ELECHOUSE_CC1101::SpiWriteBurstReg(byte addr, byte *buffer, byte num)
   SpiStart();
   temp = addr | WRITE_BURST;
   digitalWrite(SS_PIN, LOW);
-  while(digitalRead(MISO_PIN));
+  
+  // NO! while(digitalRead(MISO_PIN));
+
   SPI.transfer(temp);
   for (i = 0; i < num; i++)
   {
@@ -217,9 +219,12 @@ void ELECHOUSE_CC1101::SpiStrobe(byte strobe)
 {
   SpiStart();
   digitalWrite(SS_PIN, LOW);
-  while(digitalRead(MISO_PIN));
+  
+  // NO! while(digitalRead(MISO_PIN));
+  
   SPI.transfer(strobe);
   digitalWrite(SS_PIN, HIGH);
+  
   SpiEnd();
 }
 /****************************************************************
@@ -234,10 +239,13 @@ byte ELECHOUSE_CC1101::SpiReadReg(byte addr)
   SpiStart();
   temp = addr| READ_SINGLE;
   digitalWrite(SS_PIN, LOW);
-  while(digitalRead(MISO_PIN));
+  
+  // NO!  while(digitalRead(MISO_PIN));
+
   SPI.transfer(temp);
   value=SPI.transfer(0);
   digitalWrite(SS_PIN, HIGH);
+  
   SpiEnd();
   return value;
 }
@@ -254,12 +262,16 @@ void ELECHOUSE_CC1101::SpiReadBurstReg(byte addr, byte *buffer, byte num)
   SpiStart();
   temp = addr | READ_BURST;
   digitalWrite(SS_PIN, LOW);
-  while(digitalRead(MISO_PIN));
+  
+  //NO! while(digitalRead(MISO_PIN));
+  
   SPI.transfer(temp);
+  
   for(i=0;i<num;i++)
   {
-  buffer[i]=SPI.transfer(0);
+  	buffer[i]=SPI.transfer(0);
   }
+  
   digitalWrite(SS_PIN, HIGH);
   SpiEnd();
 }
@@ -276,9 +288,12 @@ byte ELECHOUSE_CC1101::SpiReadStatus(byte addr)
   SpiStart();
   temp = addr | READ_BURST;
   digitalWrite(SS_PIN, LOW);
-  while(digitalRead(MISO_PIN));
+  
+  //NO ! while(digitalRead(MISO_PIN));
+
   SPI.transfer(temp);
   value=SPI.transfer(0);
+  
   digitalWrite(SS_PIN, HIGH);
   SpiEnd();
   return value;
