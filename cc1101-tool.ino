@@ -30,18 +30,34 @@
 #define DEFAULT_FREQ 903.00        // 433.92
 
 
-#if defined(ARDUINO_M5STACK_CORE2)
-    byte sck  = 18;    //  GPIO 18
-    byte miso = 38;    //  GPIO 38
-    byte mosi = 23;    //  GPIO 23
-    byte ss = 27;      //  GPIO 27
-    int gdo0 = 19;     //  GPIO 19
-    int gdo2 = 35;     //  GPIO 35
+#if defined(ARDUINO_M5STACK_CORES2)
+    byte mosi = 23;
+    byte miso = 38;
+    byte sck  = 18;
+
+    byte ss   = 27;
+
+    int gdo2  = 35;
+    int gdo0  = 19;
 
 	#include <M5Unified.h>    
 	#define START _setup_M5()
     #define LOOP  _loop_M5()
 
+#elif defined(ARDUINO_M5STACK_CORES3)
+	byte mosi = 37;
+	byte miso = 35;
+	byte sck  = 36;
+
+	byte ss   =  5;
+
+	int gdo2  = 10;
+	int gdo0  =  7;
+
+    #include <M5Unified.h>	  
+    #define START _setup_M5()
+    #define LOOP  _loop_M5()
+    
 #else
 #error "SPI not defined for this processor yet"
 #endif
@@ -135,7 +151,7 @@ void asciitohex(byte *ascii_ptr, byte *hex_ptr,int len)
 static void cc1101initialize(void)
 {
     // initializing library with custom pins selected
-     ELECHOUSE_cc1101.setSpiPin(sck, miso, mosi, ss);
+     ELECHOUSE_cc1101.setPins(sck, miso, mosi, ss);
      ELECHOUSE_cc1101.setGDO(gdo0, gdo2);
 
     // Main part to tune CC1101 with proper frequency, modulation and encoding    
