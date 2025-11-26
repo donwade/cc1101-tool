@@ -16,7 +16,7 @@
 // This code will ONLY work with ESP32 board
 //
 
-#include <ELECHOUSE_CC1101_SRC_DRV.h>
+#include "ELECHOUSE_CC1101_SRC_DRV.h"
 #include <EEPROM.h>
 #include <SPI.h>
 
