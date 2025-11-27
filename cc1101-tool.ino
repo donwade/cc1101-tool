@@ -16,6 +16,8 @@
 // This code will ONLY work with ESP32 board
 //
 
+#define LINE Serial.printf("%s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
+
 #include "ELECHOUSE_CC1101_SRC_DRV.h"
 #include <EEPROM.h>
 #include <SPI.h>
@@ -37,7 +39,7 @@
 	int gdo2 = 27;
 	int gdo0 = 33;
 
-#elif define (ARDUINO_M5STACK_CORES3)
+#elif defined (ARDUINO_M5STACK_CORES3)
 	byte mosi = 37;
 	byte miso = 35;
 	byte sck =	36;
@@ -1127,14 +1129,20 @@ static void exec(char *cmdline)
 
 void setup() {
 
+#if defined (ARDUINO_M5STACK_CORES3)
+	pinMode(19, INPUT); // S3 bug. Jtag messes up Usb serial 
+#endif
+
      // initialize USB Serial Port CDC
      Serial.begin(115200);
-
-    //Init EEPROM - for ESP32 based boards only
-     EEPROM.begin(EPROMSIZE);     
+	 delay(3000);
 
      Serial.println(F("CC1101 terminal tool connected, use 'help' for list of commands...\n\r"));
      Serial.println(F("(C) Adam Loboda 2023\n\r  "));
+
+	 //Init EEPROM - for ESP32 based boards only
+	  EEPROM.begin(EPROMSIZE);	   
+	 
 
      Serial.println();  // print CRLF
 
@@ -1157,7 +1165,7 @@ void loop() {
 
   // index for serial port characters
   int i = 0;
-
+	LINE;
     /* Process incoming commands. */
     while (Serial.available()) {
         static char buffer[BUF_LENGTH];

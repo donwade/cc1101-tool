@@ -17,6 +17,8 @@ cc1101 Driver for RC Switch. Mod by Little Satan. With permission to modify and 
 #include "ELECHOUSE_CC1101_SRC_DRV.h"
 #include <Arduino.h>
 
+#define LINE Serial.printf("%s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
+
 /****************************************************************/
 #define   WRITE_BURST       0x40            //write burst
 #define   READ_SINGLE       0x80            //read single
@@ -162,15 +164,28 @@ void ELECHOUSE_CC1101::Reset (void)
 void ELECHOUSE_CC1101::Init(void)
 {
   setSpi();
-  SpiStart();                   //spi initialization
+
+  pinMode(SS_PIN,	OUTPUT);
+  pinMode(SCK_PIN,  OUTPUT);
+  pinMode(MOSI_PIN, OUTPUT);
+  pinMode(MISO_PIN, INPUT);
   
   digitalWrite(SS_PIN, HIGH);
   digitalWrite(SCK_PIN, HIGH);
   digitalWrite(MOSI_PIN, LOW);
+  LINE;
+  
+  SpiStart();       //spi initialization
+  LINE;
   
   Reset();                    //CC1101 reset
+  LINE;
+  
   RegConfigSettings();            //CC1101 register config
+  LINE;
+  
   SpiEnd();
+  LINE;
 }
 /****************************************************************
 *FUNCTION NAME:SpiWriteReg
@@ -641,12 +656,14 @@ clb4[1]=e;
 *OUTPUT       :none
 ****************************************************************/
 bool ELECHOUSE_CC1101::getCC1101(void){
-setSpi();
-if (SpiReadStatus(0x31)>0){
-return 1;
-}else{
-return 0;
-}
+	setSpi();
+
+	if (SpiReadStatus(0x31)>0)
+	{
+		return 1;
+	}else{
+		return 0;
+	}
 }
 /****************************************************************
 *FUNCTION NAME:getMode
