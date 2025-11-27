@@ -17,7 +17,7 @@ cc1101 Driver for RC Switch. Mod by Little Satan. With permission to modify and 
 #include "ELECHOUSE_CC1101_SRC_DRV.h"
 #include <Arduino.h>
 
-#define LINE Serial.printf("%s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
+#define LINE Serial.printf(">>> %s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
 
 /****************************************************************/
 #define   WRITE_BURST       0x40            //write burst
@@ -95,9 +95,12 @@ void ELECHOUSE_CC1101::SpiStart(void)
 
   // enable SPI
   #ifdef ESP32
+  LINE;
   SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
+  LINE;
   #else
   SPI.begin();
+  #error NOPE
   #endif
 }
 /****************************************************************
@@ -196,12 +199,19 @@ void ELECHOUSE_CC1101::Init(void)
 void ELECHOUSE_CC1101::SpiWriteReg(byte addr, byte value)
 {
   SpiStart();
+  LINE;
   digitalWrite(SS_PIN, LOW);
-  // NO ! while(digitalRead(MISO_PIN));
+  LINE;
+  while(digitalRead(MISO_PIN));
+  LINE;
   SPI.transfer(addr);
+  LINE;
   SPI.transfer(value); 
+  LINE;
   digitalWrite(SS_PIN, HIGH);
+  LINE;
   SpiEnd();
+  LINE;
 }
 /****************************************************************
 *FUNCTION NAME:SpiWriteBurstReg
@@ -1073,10 +1083,13 @@ else{m4DaRa = calc; i=1;}
 ****************************************************************/
 void ELECHOUSE_CC1101::RegConfigSettings(void) 
 {   
+	LINE;
     SpiWriteReg(CC1101_FSCTRL1,  0x06);
+	LINE;
     
     setCCMode(ccmode);
     setMHZ(MHz);
+	LINE;
     
     SpiWriteReg(CC1101_MDMCFG1,  0x02);
     SpiWriteReg(CC1101_MDMCFG0,  0xF8);
