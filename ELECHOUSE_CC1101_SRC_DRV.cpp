@@ -1725,7 +1725,7 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 {
 	LINE;
 	
-	if (gMHz > 866 && gMHz < 868) Serial.printf("DANGER FREQ = %f\n", gMHz);
+	if (gMHz > 866 && gMHz < 868) Serial.printf("***** DANGER TX FREQ = %f\n", gMHz);
 
     SpiWriteReg(CC1101_TXFIFO, size);
 
@@ -1770,7 +1770,7 @@ void ELECHOUSE_CC1101::SendData(char *txchar, int t)
 ****************************************************************/
 void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size, int t)
 {
-	if (gMHz > 866 && gMHz < 868) Serial.printf("DANGER FREQ = %f\n", gMHz);
+	if (gMHz > 866 && gMHz < 868) Serial.printf("*****  DANGER TX FREQ = %f\n", gMHz);
 
     SpiWriteReg(CC1101_TXFIFO, size);
     SpiWriteBurstReg(CC1101_TXFIFO, txBuffer, size);    //write data to send
