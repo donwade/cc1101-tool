@@ -141,6 +141,7 @@ void setCCMode(bool s);
 void setModulation(byte m);
 void setPA(int p);
 void setMHZ(float mhz);
+void setOSCdrift(float hz);
 void setChannel(byte chnl);
 void setChsp(float f);
 void setRxBW(float f);
@@ -191,4 +192,6 @@ bool CheckRxFifo(int t);
 
 extern ELECHOUSE_CC1101 ELECHOUSE_cc1101;
 
+#define LINE Serial.printf(">>>  %s:%d \n", __FUNCTION__,__LINE__);
+ 
 #endif

@@ -27,7 +27,12 @@
 #define EPROMSIZE 512               // Size of EEPROM in your Arduino chip. For ESP32 it is Flash simulated so very slow
 #define BUF_LENGTH 128              // Buffer for the incoming command.
 
-// defining PINs set for ESP32 WROOM module
+#define DEFAULT_TxFREQ 866.912 //903 //868.0 //903.00
+
+#define DEFAULT_RxFREQ 867.3875
+
+#define DEFAULT_STEP   12500
+
 #if defined (ARDUINO_M5STACK_CORE2)
 
 byte mosi = 23;
@@ -36,7 +41,7 @@ byte sck = 18;
 
 byte ss = 27;
 
-int gdo2 = 27;
+int gdo2 = 19;
 int gdo0 = 33;
 
 #elif defined (ARDUINO_M5STACK_CORES3)
@@ -85,8 +90,8 @@ byte ccsendingbuffer[CCBUFFERSIZE] = { 0 };
 byte bigrecordingbuffer[RECORDINGBUFFERSIZE] = { 0 };
 
 // buffer for hex to ascii conversions
-byte textbuffer[BUF_LENGTH];
-//char textbuffer[BUF_LENGTH];
+byte hexBuffer[BUF_LENGTH];
+//char hexBuffer[BUF_LENGTH];
 // convert bytes in table to string with hex numbers
 void asciitohex(byte *ascii_ptr, byte *hex_ptr, int len)
 {
@@ -120,7 +125,7 @@ void asciitohex(byte *ascii_ptr, byte *hex_ptr, int len)
 
 
 // convert string with hex numbers to array of bytes
-void  hextoascii(byte *ascii_ptr, byte *hex_ptr, int len)
+int  hextoascii(byte *ascii_ptr, byte *hex_ptr, int len)
 {
     byte i, j;
 
@@ -149,8 +154,9 @@ void  hextoascii(byte *ascii_ptr, byte *hex_ptr, int len)
             ascii_ptr[i] = ascii_ptr[i] + (j - 87);
     }
 
-    ;
+    
     ascii_ptr[i++] = '\0';
+    return i;
 }
 
 
@@ -165,26 +171,32 @@ static void cc1101initialize(void)
     ELECHOUSE_cc1101.Init();                // must be set to initialize the cc1101!
     ELECHOUSE_cc1101.setGDO0(gdo0);         // set lib internal gdo pin (gdo0). Gdo2 not use for this example.
     ELECHOUSE_cc1101.setCCMode(1);          // set config for internal transmission mode. value 0 is for RAW recording/replaying
+
     ELECHOUSE_cc1101.setModulation(2);      // set modulation mode. 0 = 2-FSK, 1 = GFSK, 2 = ASK/OOK, 3 = 4-FSK, 4 = MSK.
-    ELECHOUSE_cc1101.setMHZ(433.92);        // Here you can set your basic frequency. The lib calculates the frequency automatically (default = 433.92).The cc1101 can: 300-348 MHZ, 387-464MHZ and 779-928MHZ. Read More info from datasheet.
-    ELECHOUSE_cc1101.setDeviation(47.60);   // Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.
+    ELECHOUSE_cc1101.setMHZ(DEFAULT_TxFREQ);  // Here you can set your basic frequency. The lib calculates the frequency automatically (default = 433.92).The cc1101 can: 300-348 MHZ, 387-464MHZ and 779-928MHZ. Read More info from datasheet.
+    ELECHOUSE_cc1101.setDeviation(12.5);    // Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.
     ELECHOUSE_cc1101.setChannel(0);         // Set the Channelnumber from 0 to 255. Default is cahnnel 0.
+
     ELECHOUSE_cc1101.setChsp(199.95);       // The channel spacing is multiplied by the channel number CHAN and added to the base frequency in kHz. Value from 25.39 to 405.45. Default is 199.95 kHz.
     ELECHOUSE_cc1101.setRxBW(812.50);       // Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
-    ELECHOUSE_cc1101.setDRate(9.6);         // Set the Data Rate in kBaud. Value from 0.02 to 1621.83. Default is 99.97 kBaud!
-    ELECHOUSE_cc1101.setPA(10);             // Set TxPower. The following settings are possible depending on the frequency band.  (-30  -20  -15  -10  -6    0    5    7    10   11   12) Default is max!
+    ELECHOUSE_cc1101.setDRate(.3);         // Set the Data Rate in kBaud. Value from 0.02 to 1621.83. Default is 99.97 kBaud!
+    ELECHOUSE_cc1101.setPA(-6);             // Set TxPower. The following settings are possible depending on the frequency band.  (-30  -20  -15  -10  -6    0    5    7    10   11   12) Default is max!
+
     ELECHOUSE_cc1101.setSyncMode(2);        // Combined sync-word qualifier mode. 0 = No preamble/sync. 1 = 16 sync word bits detected. 2 = 16/16 sync word bits detected. 3 = 30/32 sync word bits detected. 4 = No preamble/sync, carrier-sense above threshold. 5 = 15/16 + carrier-sense above threshold. 6 = 16/16 + carrier-sense above threshold. 7 = 30/32 + carrier-sense above threshold.
     ELECHOUSE_cc1101.setSyncWord(211, 145); // Set sync word. Must be the same for the transmitter and receiver. Default is 211,145 (Syncword high, Syncword low)
     ELECHOUSE_cc1101.setAdrChk(0);          // Controls address check configuration of received packages. 0 = No address check. 1 = Address check, no broadcast. 2 = Address check and 0 (0x00) broadcast. 3 = Address check and 0 (0x00) and 255 (0xFF) broadcast.
     ELECHOUSE_cc1101.setAddr(0);            // Address used for packet filtration. Optional broadcast addresses are 0 (0x00) and 255 (0xFF).
+
     ELECHOUSE_cc1101.setWhiteData(0);       // Turn data whitening on / off. 0 = Whitening off. 1 = Whitening on.
     ELECHOUSE_cc1101.setPktFormat(0);       // Format of RX and TX data. 0 = Normal mode, use FIFOs for RX and TX. 1 = Synchronous serial mode, Data in on GDO0 and data out on either of the GDOx pins. 2 = Random TX mode; sends random data using PN9 generator. Used for test. Works as normal mode, setting 0 (00), in RX. 3 = Asynchronous serial mode, Data in on GDO0 and data out on either of the GDOx pins.
     ELECHOUSE_cc1101.setLengthConfig(1);    // 0 = Fixed packet length mode. 1 = Variable packet length mode. 2 = Infinite packet length mode. 3 = Reserved
     ELECHOUSE_cc1101.setPacketLength(0);    // Indicates the packet length when fixed packet length mode is enabled. If variable packet length mode is used, this value indicates the maximum packet length allowed.
+
     ELECHOUSE_cc1101.setCrc(0);             // 1 = CRC calculation in TX and CRC check in RX enabled. 0 = CRC disabled for TX and RX.
     ELECHOUSE_cc1101.setCRC_AF(0);          // Enable automatic flush of RX FIFO when CRC is not OK. This requires that only one packet is in the RXIFIFO and that packet length is limited to the RX FIFO size.
     ELECHOUSE_cc1101.setDcFilterOff(0);     // Disable digital DC blocking filter before demodulator. Only for data rates ≤ 250 kBaud The recommended IF frequency changes when the DC blocking is disabled. 1 = Disable (current optimized). 0 = Enable (better sensitivity).
     ELECHOUSE_cc1101.setManchester(0);      // Enables Manchester encoding/decoding. 0 = Disable. 1 = Enable.
+
     ELECHOUSE_cc1101.setFEC(0);             // Enable Forward Error Correction (FEC) with interleaving for packet payload (Only supported for fixed packet length mode. 0 = Disable. 1 = Enable.
     ELECHOUSE_cc1101.setPRE(0);             // Sets the minimum number of preamble bytes to be transmitted. Values: 0 : 2, 1 : 3, 2 : 4, 3 : 6, 4 : 8, 5 : 12, 6 : 16, 7 : 24
     ELECHOUSE_cc1101.setPQT(0);             // Preamble quality estimator threshold. The preamble quality estimator increases an internal counter by one each time a bit is received that is different from the previous bit, and decreases the counter by 8 each time a bit is received that is the same as the last bit. A threshold of 4∙PQT for this counter is used to gate sync word detection. When PQT=0 a sync word is always accepted.
@@ -200,8 +212,8 @@ static void exec(char *cmdline)
     int setting, setting2, len;
     uint16_t brute, poweroftwo;
     byte j, k;
-    float settingf1;
-    float settingf2;
+    float startFreq;
+    float endFreq;
     // variables for frequency scanner
     float freq;
     long compare_freq;
@@ -310,20 +322,20 @@ static void exec(char *cmdline)
     }
     else if (strcmp_P(command, PSTR("setmhz")) == 0)
     {
-        settingf1 = atof(cmdline);
-        ELECHOUSE_cc1101.setMHZ(settingf1);
+        startFreq = atof(cmdline);
+        ELECHOUSE_cc1101.setMHZ(startFreq);
         Serial.print(F("\r\nFrequency: "));
-        Serial.print(settingf1);
-        Serial.print(F(" MHz\r\n"));
+        Serial.print(startFreq);
+        Serial.print(F(" gMHz\r\n"));
 
         // Handling SETDEVIATION command
     }
     else if (strcmp_P(command, PSTR("setdeviation")) == 0)
     {
-        settingf1 = atof(cmdline);
-        ELECHOUSE_cc1101.setDeviation(settingf1);
+        startFreq = atof(cmdline);
+        ELECHOUSE_cc1101.setDeviation(startFreq);
         Serial.print(F("\r\nDeviation: "));
-        Serial.print(settingf1);
+        Serial.print(startFreq);
         Serial.print(F(" KHz\r\n"));
 
         // Handling SETCHANNEL command
@@ -340,30 +352,30 @@ static void exec(char *cmdline)
     }
     else if (strcmp_P(command, PSTR("setchsp")) == 0)
     {
-        settingf1 = atof(cmdline);
-        ELECHOUSE_cc1101.setChsp(settingf1);
+        startFreq = atof(cmdline);
+        ELECHOUSE_cc1101.setChsp(startFreq);
         Serial.print(F("\r\nChann spacing: "));
-        Serial.print(settingf1);
+        Serial.print(startFreq);
         Serial.print(F(" kHz\r\n"));
 
         // Handling SETRXBW command
     }
     else if (strcmp_P(command, PSTR("setrxbw")) == 0)
     {
-        settingf1 = atof(cmdline);
-        ELECHOUSE_cc1101.setRxBW(settingf1);
+        startFreq = atof(cmdline);
+        ELECHOUSE_cc1101.setRxBW(startFreq);
         Serial.print(F("\r\nRX bandwidth: "));
-        Serial.print(settingf1);
+        Serial.print(startFreq);
         Serial.print(F(" kHz \r\n"));
 
         // Handling SETDRATE command
     }
     else if (strcmp_P(command, PSTR("setdrate")) == 0)
     {
-        settingf1 = atof(cmdline);
-        ELECHOUSE_cc1101.setDRate(settingf1);
+        startFreq = atof(cmdline);
+        ELECHOUSE_cc1101.setDRate(startFreq);
         Serial.print(F("\r\nDatarate: "));
-        Serial.print(settingf1);
+        Serial.print(startFreq);
         Serial.print(F(" kbaud\r\n"));
 
         // Handling SETPA command
@@ -649,25 +661,40 @@ static void exec(char *cmdline)
     }
     else if (strcmp_P(command, PSTR("scan")) == 0)
     {
-        settingf1 = atof(strsep(&cmdline, " "));
-        settingf2 = atof(cmdline);
+    	// round down to nearest step size
+        startFreq = atof(strsep(&cmdline, " "));
+        uint32_t start = ((startFreq * 1000000.)/ DEFAULT_STEP) * DEFAULT_STEP;
+        startFreq = start/1000000;
+
+        // round up to nearest step size
+        endFreq = atof(cmdline);
+		uint32_t end = (((endFreq * 1000000.) + DEFAULT_STEP/2) /DEFAULT_STEP ) * DEFAULT_STEP;
+		endFreq = end/1000000;
+		
         Serial.print(F("\r\nScanning frequency range from : "));
-        Serial.print(settingf1);
-        Serial.print(F(" MHz to "));
-        Serial.print(settingf2);
+        Serial.print(startFreq);
+        Serial.print(F(" gMHz to "));
+        Serial.print(endFreq);
         Serial.print(F(" MHz, press any key for stop or wait...\r\n"));
+
+		delay(6000);
+		
         // initialize parameters for scanning
         ELECHOUSE_cc1101.Init();
         ELECHOUSE_cc1101.setRxBW(58);
         ELECHOUSE_cc1101.SetRx();
+
         // Do scanning until some key pressed
-        freq = settingf1;  // start frequency for scanning
+        freq = startFreq;  // start frequency for scanning
         mark_rssi = -100;
 
         while (!Serial.available())
         {
+        	Serial.printf("scan freq = %f ", freq);
             ELECHOUSE_cc1101.setMHZ(freq);
+            delay(50);
             rssi = ELECHOUSE_cc1101.getRssi();
+        	Serial.printf(" rssi = %d\n", rssi);
 
             if (rssi > -75)
             {
@@ -676,17 +703,12 @@ static void exec(char *cmdline)
                     mark_rssi = rssi;
                     mark_freq = freq;
                 }
-
-                ;
             }
+            freq += (float)DEFAULT_STEP/1000000.0; // 0.01;
 
-            ;
-
-            freq += 0.01;
-
-            if (freq > settingf2)
+            if (freq > endFreq)
             {
-                freq = settingf1;
+                freq = startFreq;
 
                 if (mark_rssi > -75)
                 {
@@ -706,24 +728,13 @@ static void exec(char *cmdline)
                     else
                     {
                         compare_freq = mark_freq * 100;
-                        freq = mark_freq - 0.10;
+                        //freq = mark_freq - 0.10;
                         mark_freq = 0;
                         mark_rssi = -100;
                     }
-
-                    ;
-                }
-
-                ;
-
+               }
             }
-
-            ;    // end of IF freq>stop frequency
-
         }
-
-        ;     // End of While
-
 
         // handling SAVE command
     }
@@ -889,32 +900,52 @@ static void exec(char *cmdline)
     }
     else if (strcmp_P(command, PSTR("tx")) == 0)
     {
+    	const char testString[] = "0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F ";
+		LINE;
+		LINE;
+		LINE;
         // convert hex array to set of bytes
-        if ((strlen(cmdline) <= 120) && (strlen(cmdline) > 0))
+        int iCnt;
+
+#if 0   
+        if (cmdline && (strlen(cmdline) <= 120) && (strlen(cmdline) > 0))
         {
-            hextoascii(textbuffer, (byte *)cmdline, strlen(cmdline));
-            memcpy(ccsendingbuffer, textbuffer, strlen(cmdline) / 2);
-            ccsendingbuffer[strlen(cmdline) / 2] = 0x00;
-            Serial.print("\r\nTransmitting RF packets.\r\n");
-            // send these data to radio over CC1101
-            ELECHOUSE_cc1101.SendData(ccsendingbuffer, (byte)(strlen(cmdline) / 2));
-            // for DEBUG only
-            asciitohex(ccsendingbuffer, textbuffer, strlen(cmdline) / 2);
-            Serial.print(F("Sent frame: "));
-            Serial.print((char *)textbuffer);
-            Serial.print(F("\r\n"));
+        	LINE;
+            iCnt = hextoascii(hexBuffer, (byte *)cmdline, strlen(cmdline));
         }
         else
+#endif
         {
-            Serial.print(F("Wrong parameters.\r\n"));
+        	LINE;
+        	// none provided use canned string
+            iCnt =hextoascii(hexBuffer, (byte *) testString, strlen(testString));
         }
 
-        ;
+        
+        memcpy(ccsendingbuffer, hexBuffer,  iCnt);  /// ?? strlen(cmdline) / 2);
+        ccsendingbuffer[iCnt] = 0x00;
 
+		Serial.println("wait for 7 seconds");
+		delay(7000);
+		
+        for (int cnt= 0; cnt < 30; cnt++)
+        {
+	        Serial.printf("\r\nTransmitting RF packet %d of 30.\r\n", cnt);
+        
+        	// send these data to radio over CC1101
+        	ELECHOUSE_cc1101.SendData(ccsendingbuffer, iCnt);
 
-
-        // handling RECRAW command
+        	delay(1000);
+	        asciitohex(ccsendingbuffer, hexBuffer, iCnt);
+	        
+	        Serial.print(F("Sent frame: "));
+	        Serial.print((char *)hexBuffer);
+	        Serial.print(F("\r\n"));
+			// for DEBUG only
+		}
+    
     }
+	// handling RECRAW command
     else if (strcmp_P(command, PSTR("recraw")) == 0)
     {
         // take interval period for samplink
@@ -1014,8 +1045,8 @@ static void exec(char *cmdline)
                 // when buffer full print the ouptput to serial port
                 for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
                 {
-                    asciitohex(&bigrecordingbuffer[i], textbuffer, 32);
-                    Serial.print((char *)textbuffer);
+                    asciitohex(&bigrecordingbuffer[i], hexBuffer, 32);
+                    Serial.print((char *)hexBuffer);
                 }
 
                 ;
@@ -1094,8 +1125,8 @@ static void exec(char *cmdline)
 
         for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
         {
-            asciitohex(&bigrecordingbuffer[i], textbuffer, 32);
-            Serial.print((char *)textbuffer);
+            asciitohex(&bigrecordingbuffer[i], hexBuffer, 32);
+            Serial.print((char *)hexBuffer);
         }
 
         Serial.print(F("\r\n"));
@@ -1110,12 +1141,12 @@ static void exec(char *cmdline)
 
         for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
         {           // first convert to hex numbers
-            asciitohex((byte *)&bigrecordingbuffer[i], (byte *)textbuffer, 32);
+            asciitohex((byte *)&bigrecordingbuffer[i], (byte *)hexBuffer, 32);
 
             // now decode as binary and print
             for (setting = 0; setting < 64 ; setting++)
             {
-                setting2 = textbuffer[setting];
+                setting2 = hexBuffer[setting];
 
                 switch (setting2)
                 {
@@ -1208,13 +1239,13 @@ static void exec(char *cmdline)
         if ((len <= 120) && (len > 0))
         {
             // convert the hex content to array of bytes
-            hextoascii(textbuffer, (byte *)cmdline, len);
+            hextoascii(hexBuffer, (byte *)cmdline, len);
             len = len / 2;
 
             // check if the frame fits into the buffer and store it
             if ((bigrecordingbufferpos + len) < RECORDINGBUFFERSIZE)
             {          // copy current frame and increase pointer for next frames
-                memcpy(&bigrecordingbuffer[bigrecordingbufferpos], &textbuffer, len);
+                memcpy(&bigrecordingbuffer[bigrecordingbufferpos], &hexBuffer, len);
                 // increase position in big recording buffer for next frame
                 bigrecordingbufferpos = bigrecordingbufferpos + len;
                 Serial.print(F("\r\nChunk added to recording buffer\r\n"));
@@ -1337,7 +1368,7 @@ static void exec(char *cmdline)
         if ((len <= 120) && (len > 0))
         {
             // convert the hex content to array of bytes
-            hextoascii(textbuffer, (byte *)cmdline, len);
+            hextoascii(hexBuffer, (byte *)cmdline, len);
             len = len / 2;
 
             // check if the frame fits into the buffer and store it
@@ -1346,7 +1377,7 @@ static void exec(char *cmdline)
                 bigrecordingbuffer[bigrecordingbufferpos] = len;
                 bigrecordingbufferpos++;
                 // next - copy current frame and increase
-                memcpy(&bigrecordingbuffer[bigrecordingbufferpos], &textbuffer, len);
+                memcpy(&bigrecordingbuffer[bigrecordingbufferpos], &hexBuffer, len);
                 // increase position in big recording buffer for next frame
                 bigrecordingbufferpos = bigrecordingbufferpos + len;
                 // increase counter of frames stored
@@ -1386,16 +1417,16 @@ static void exec(char *cmdline)
                 if ((len <= 60)and(len > 0))
                 {
                     // take next frame from the buffer  for replay
-                    // flush textbuffer
+                    // flush hexBuffer
                     for (setting2 = 0; setting2 < BUF_LENGTH; setting2++)
-                        textbuffer[setting2] = 0;
+                        hexBuffer[setting2] = 0;
 
                     ;
-                    asciitohex(&bigrecordingbuffer[bigrecordingbufferpos + 1], textbuffer, len);
+                    asciitohex(&bigrecordingbuffer[bigrecordingbufferpos + 1], hexBuffer, len);
                     Serial.print(F("\r\nFrame "));
                     Serial.print(setting);
                     Serial.print(F(" : "));
-                    Serial.print((char *)textbuffer);
+                    Serial.print((char *)hexBuffer);
                     Serial.print(F("\r\n"));
                 }
 
@@ -1468,9 +1499,9 @@ static void exec(char *cmdline)
         Serial.print(F("Error: Unknown command: "));
         Serial.println(command);
         //  debug only
-        // asciitohex(command, (byte *)textbuffer,  strlen(command));
+        // asciitohex(command, (byte *)hexBuffer,  strlen(command));
         // Serial.print(F("\r\n"));
-        // Serial.print((char *)textbuffer);
+        // Serial.print((char *)hexBuffer);
         // Serial.print(F("\r\n"));
     }
 }
@@ -1649,17 +1680,17 @@ void loop()
                 // put NULL at the end of char buffer
                 ccreceivingbuffer[len] = '\0';
 
-                // flush textbuffer
+                // flush hexBuffer
                 for (int i = 0; i < BUF_LENGTH; i++)
-                    textbuffer[i] = 0;
+                    hexBuffer[i] = 0;
 
                 ;
 
                 //Print received packet as set of hex values directly
                 // not to loose any data in buffer
-                // asciitohex((byte *)ccreceivingbuffer, (byte *)textbuffer,  len);
-                asciitohex(ccreceivingbuffer, textbuffer, len);
-                Serial.print((char *)textbuffer);
+                // asciitohex((byte *)ccreceivingbuffer, (byte *)hexBuffer,  len);
+                asciitohex(ccreceivingbuffer, hexBuffer, len);
+                Serial.print((char *)hexBuffer);
                 // set RX  mode again
                 ELECHOUSE_cc1101.SetRx();
             }

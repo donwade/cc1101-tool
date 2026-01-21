@@ -46,7 +46,8 @@ byte GDO2_M[max_modul];
 byte gdo_set = 0;
 bool spi = 0;
 bool ccmode = 0;
-float MHz = 433.92;
+float gMHz = 433.92;
+float tweakFreqHz = -( 20743. + 4502.); // running high. knock it down.
 byte m4RxBw = 0;
 byte m4DaRa;
 byte m2DCOFF;
@@ -82,7 +83,7 @@ uint8_t PA_TABLE_915[10] { 0x03, 0x0E, 0x1E, 0x27, 0x38, 0x8E, 0x84, 0xCC, 0xC3,
 
 void wait4MISO(void)
 {
-	while(digitalRead(MISO_PIN));
+	//while(digitalRead(MISO_PIN));
 }
 
 /****************************************************************
@@ -118,7 +119,7 @@ void ELECHOUSE_CC1101::SpiEnd(void)
 {
     // disable SPI
     SPI.endTransaction();
-    SPI.end();
+    //SPI.end();   // DWADE DO NOT DO THIS!!! 
 }
 
 
@@ -189,21 +190,16 @@ void ELECHOUSE_CC1101::Init(void)
     digitalWrite(SS_PIN, HIGH);
     digitalWrite(SCK_PIN, HIGH);
     digitalWrite(MOSI_PIN, LOW);
-    LINE;
 
     SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
 
     //SpiStart();     //spi initialization
-    LINE;
 
     Reset();                  //CC1101 reset
-    LINE;
 
     RegConfigSettings();          //CC1101 register config
-    LINE;
 
     SpiEnd();
-    LINE;
 }
 
 
@@ -216,21 +212,14 @@ void ELECHOUSE_CC1101::Init(void)
 void ELECHOUSE_CC1101::SpiWriteReg(byte addr, byte value)
 {
     SpiStart();
-    LINE;
     digitalWrite(SS_PIN, LOW);
-    LINE;
 
     wait4MISO();
 
-    LINE;
     SPI.transfer(addr);
-    LINE;
     SPI.transfer(value);
-    LINE;
     digitalWrite(SS_PIN, HIGH);
-    LINE;
     SpiEnd();
-    LINE;
 }
 
 
@@ -248,8 +237,8 @@ void ELECHOUSE_CC1101::SpiWriteBurstReg(byte addr, byte *buffer, byte num)
     temp = addr | WRITE_BURST;
     digitalWrite(SS_PIN, LOW);
 
-    // NO! while(digitalRead(MISO_PIN));
-
+    wait4MISO();
+    
     SPI.transfer(temp);
 
     for (i = 0; i < num; i++)
@@ -271,8 +260,8 @@ void ELECHOUSE_CC1101::SpiStrobe(byte strobe)
     SpiStart();
     digitalWrite(SS_PIN, LOW);
 
-    // NO! while(digitalRead(MISO_PIN));
-
+    wait4MISO();
+    
     SPI.transfer(strobe);
     digitalWrite(SS_PIN, HIGH);
 
@@ -294,7 +283,7 @@ byte ELECHOUSE_CC1101::SpiReadReg(byte addr)
     temp = addr | READ_SINGLE;
     digitalWrite(SS_PIN, LOW);
 
-    // NO!  while(digitalRead(MISO_PIN));
+    wait4MISO();
 
     SPI.transfer(temp);
     value = SPI.transfer(0);
@@ -319,7 +308,7 @@ void ELECHOUSE_CC1101::SpiReadBurstReg(byte addr, byte *buffer, byte num)
     temp = addr | READ_BURST;
     digitalWrite(SS_PIN, LOW);
 
-    //NO! while(digitalRead(MISO_PIN));
+    wait4MISO();
 
     SPI.transfer(temp);
 
@@ -366,6 +355,7 @@ void ELECHOUSE_CC1101::setSpi(void)
 {
     if (spi == 0)
     {
+    LINE;
 #if defined __AVR_ATmega168__ || defined __AVR_ATmega328P__
         SCK_PIN = 13; MISO_PIN = 12; MOSI_PIN = 11; SS_PIN = 10;
 #elif defined __AVR_ATmega1280__ || defined __AVR_ATmega2560__
@@ -386,13 +376,14 @@ void ELECHOUSE_CC1101::setSpi(void)
 
 
 /****************************************************************
-* FUNCTION NAME:COSTUM SPI
-* FUNCTION     :set costum spi pins.
+* FUNCTION NAME:CUSTOM SPI
+* FUNCTION     :set custom spi pins.
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
 void ELECHOUSE_CC1101::setSpiPin(byte sck, byte miso, byte mosi, byte ss)
 {
+	LINE;
     spi = 1;
     SCK_PIN = sck;
     MISO_PIN = miso;
@@ -402,13 +393,14 @@ void ELECHOUSE_CC1101::setSpiPin(byte sck, byte miso, byte mosi, byte ss)
 
 
 /****************************************************************
-* FUNCTION NAME:COSTUM SPI
-* FUNCTION     :set costum spi pins.
+* FUNCTION NAME:CUSTOM SPI
+* FUNCTION     :set custom spi pins.
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
 void ELECHOUSE_CC1101::addSpiPin(byte sck, byte miso, byte mosi, byte ss, byte modul)
 {
+	LINE;
     spi = 1;
     SCK_PIN_M[modul] = sck;
     MISO_PIN_M[modul] = miso;
@@ -425,6 +417,7 @@ void ELECHOUSE_CC1101::addSpiPin(byte sck, byte miso, byte mosi, byte ss, byte m
 ****************************************************************/
 void ELECHOUSE_CC1101::setGDO(byte gdo0, byte gdo2)
 {
+	LINE;
     GDO0 = gdo0;
     GDO2 = gdo2;
     GDO_Set();
@@ -439,6 +432,7 @@ void ELECHOUSE_CC1101::setGDO(byte gdo0, byte gdo2)
 ****************************************************************/
 void ELECHOUSE_CC1101::setGDO0(byte gdo0)
 {
+	LINE;
     GDO0 = gdo0;
     GDO0_Set();
 }
@@ -452,6 +446,7 @@ void ELECHOUSE_CC1101::setGDO0(byte gdo0)
 ****************************************************************/
 void ELECHOUSE_CC1101::addGDO(byte gdo0, byte gdo2, byte modul)
 {
+	LINE;
     GDO0_M[modul] = gdo0;
     GDO2_M[modul] = gdo2;
     gdo_set = 2;
@@ -467,6 +462,7 @@ void ELECHOUSE_CC1101::addGDO(byte gdo0, byte gdo2, byte modul)
 ****************************************************************/
 void ELECHOUSE_CC1101::addGDO0(byte gdo0, byte modul)
 {
+	LINE;
     GDO0_M[modul] = gdo0;
     gdo_set = 1;
     GDO0_Set();
@@ -574,7 +570,7 @@ void ELECHOUSE_CC1101::setPA(int p)
 
     pa = p;
 
-    if (MHz >= 300 && MHz <= 348)
+    if (gMHz >= 300 && gMHz <= 348)
     {
         if (pa <= -30)
             a = PA_TABLE_315[0];
@@ -595,7 +591,7 @@ void ELECHOUSE_CC1101::setPA(int p)
 
         last_pa = 1;
     }
-    else if (MHz >= 378 && MHz <= 464)
+    else if (gMHz >= 378 && gMHz <= 464)
     {
         if (pa <= -30)
             a = PA_TABLE_433[0];
@@ -616,7 +612,7 @@ void ELECHOUSE_CC1101::setPA(int p)
 
         last_pa = 2;
     }
-    else if (MHz >= 779 && MHz <= 899.99)
+    else if (gMHz >= 779 && gMHz <= 899.99)
     {
         if (pa <= -30)
             a = PA_TABLE_868[0];
@@ -641,7 +637,7 @@ void ELECHOUSE_CC1101::setPA(int p)
 
         last_pa = 3;
     }
-    else if (MHz >= 900 && MHz <= 928)
+    else if (gMHz >= 900 && gMHz <= 928)
     {
         if (pa <= -30)
             a = PA_TABLE_915[0];
@@ -681,6 +677,14 @@ void ELECHOUSE_CC1101::setPA(int p)
     SpiWriteBurstReg(CC1101_PATABLE, PA_TABLE, 8);
 }
 
+/****************************************************************
+* FUNCTION NAME:setOSCdrift
+* INPUT        : target miss on freq adj
+****************************************************************/
+void ELECHOUSE_CC1101::setOSCdrift(float hz)
+{
+	tweakFreqHz = hz;
+}
 
 /****************************************************************
 * FUNCTION NAME:Frequency Calculator
@@ -694,8 +698,11 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
     byte freq1 = 0;
     byte freq0 = 0;
 
-    MHz = mhz;
+    gMHz = mhz;
+	mhz += tweakFreqHz/1e6;   // offset 20khz expressed in mhz
 
+	Serial.printf("tgt=%f adj=%f\n", gMHz, mhz);
+	
     for (bool i = 0; i == 0;)
     {
         if (mhz >= 26)
@@ -728,7 +735,8 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
     SpiWriteReg(CC1101_FREQ1, freq1);
     SpiWriteReg(CC1101_FREQ0, freq0);
 
-    Calibrate();
+    //Calibrate();  // messes things up.
+    
 }
 
 
@@ -741,11 +749,11 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 void ELECHOUSE_CC1101::Calibrate(void)
 {
 
-    if (MHz >= 300 && MHz <= 348)
+    if (gMHz >= 300 && gMHz <= 348)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 300, 348, clb1[0], clb1[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(gMHz, 300, 348, clb1[0], clb1[1]));
 
-        if (MHz < 322.88)
+        if (gMHz < 322.88)
         {
             SpiWriteReg(CC1101_TEST0, 0x0B);
         }
@@ -761,11 +769,11 @@ void ELECHOUSE_CC1101::Calibrate(void)
                 setPA(pa);
         }
     }
-    else if (MHz >= 378 && MHz <= 464)
+    else if (gMHz >= 378 && gMHz <= 464)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 378, 464, clb2[0], clb2[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(gMHz, 378, 464, clb2[0], clb2[1]));
 
-        if (MHz < 430.5)
+        if (gMHz < 430.5)
         {
             SpiWriteReg(CC1101_TEST0, 0x0B);
         }
@@ -781,11 +789,11 @@ void ELECHOUSE_CC1101::Calibrate(void)
                 setPA(pa);
         }
     }
-    else if (MHz >= 779 && MHz <= 899.99)
+    else if (gMHz >= 779 && gMHz <= 899.99)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 779, 899, clb3[0], clb3[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(gMHz, 779, 899, clb3[0], clb3[1]));
 
-        if (MHz < 861)
+        if (gMHz < 861)
         {
             SpiWriteReg(CC1101_TEST0, 0x0B);
         }
@@ -801,9 +809,9 @@ void ELECHOUSE_CC1101::Calibrate(void)
                 setPA(pa);
         }
     }
-    else if (MHz >= 900 && MHz <= 928)
+    else if (gMHz >= 900 && gMHz <= 928)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 900, 928, clb4[0], clb4[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(gMHz, 900, 928, clb4[0], clb4[1]));
         SpiWriteReg(CC1101_TEST0, 0x09);
         int s = ELECHOUSE_cc1101.SpiReadStatus(CC1101_FSCAL2);
 
@@ -1527,7 +1535,7 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
 
     setCCMode(ccmode);
     LINE;
-    setMHZ(MHz);
+    setMHZ(gMHz);
     LINE;
 
     SpiWriteReg(CC1101_MDMCFG1, 0x02);
@@ -1715,19 +1723,24 @@ void ELECHOUSE_CC1101::SendData(char *txchar)
 ****************************************************************/
 void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 {
+	LINE;
+	
+	if (gMHz > 866 && gMHz < 868) Serial.printf("DANGER FREQ = %f\n", gMHz);
+
     SpiWriteReg(CC1101_TXFIFO, size);
+
     SpiWriteBurstReg(CC1101_TXFIFO, txBuffer, size);    //write data to send
+
     SpiStrobe(CC1101_SIDLE);
-    SpiStrobe(CC1101_STX);                              //start send
+    SpiStrobe(CC1101_STX);      //start send
 
-    while (!digitalRead(GDO0))
-        ;                                     // Wait for GDO0 to be set -> sync transmitted
-
-    while (digitalRead(GDO0))
-        ;                                   // Wait for GDO0 to be cleared -> end of packet
+    while (!digitalRead(GDO0)); // -> sync transmitted
+    while ( digitalRead(GDO0)); // -> end of packet
 
     SpiStrobe(CC1101_SFTX);                 //flush TXfifo
     trxstate = 1;
+
+    LINE;
 }
 
 
@@ -1757,6 +1770,8 @@ void ELECHOUSE_CC1101::SendData(char *txchar, int t)
 ****************************************************************/
 void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size, int t)
 {
+	if (gMHz > 866 && gMHz < 868) Serial.printf("DANGER FREQ = %f\n", gMHz);
+
     SpiWriteReg(CC1101_TXFIFO, size);
     SpiWriteBurstReg(CC1101_TXFIFO, txBuffer, size);    //write data to send
     SpiStrobe(CC1101_SIDLE);
