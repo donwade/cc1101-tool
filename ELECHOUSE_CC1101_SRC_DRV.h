@@ -141,6 +141,8 @@ void setCCMode(bool s);
 void setModulation(byte m);
 void setPA(int p);
 void setMHZ(float mhz);
+float getMHZ(void);
+
 void setOSCdrift(float hz);
 void setChannel(byte chnl);
 void setChsp(float f);

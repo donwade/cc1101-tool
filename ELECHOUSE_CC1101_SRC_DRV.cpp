@@ -19,6 +19,8 @@
 
 #define LINE Serial.printf(">>> %s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
 
+SPIClass MY_SPI( VSPI);
+
 /****************************************************************/
 #define   WRITE_BURST       0x40            //write burst
 #define   READ_SINGLE       0x80            //read single
@@ -47,7 +49,7 @@ byte gdo_set = 0;
 bool spi = 0;
 bool ccmode = 0;
 float gMHz = 433.92;
-float tweakFreqHz = -( 20743. + 4502.); // running high. knock it down.
+float tweakFreqHz = -( 20743 + 20400 + 4502.+ 1800 - 800); // running high. knock it down.
 byte m4RxBw = 0;
 byte m4DaRa;
 byte m2DCOFF;
@@ -97,13 +99,13 @@ void ELECHOUSE_CC1101::SpiStart(void)
 
    return;   // quit restarting the spi engine.
    
-   // enable SPI
+   // enable MY_SPI
 #ifdef ESP32
     LINE;
-    //SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
+    //MY_SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
     LINE;
 #else
-    SPI.begin();
+    MY_SPI.begin();
 	#error NOPE
 #endif
 }
@@ -117,9 +119,9 @@ void ELECHOUSE_CC1101::SpiStart(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::SpiEnd(void)
 {
-    // disable SPI
-    SPI.endTransaction();
-    //SPI.end();   // DWADE DO NOT DO THIS!!! 
+    // disable MY_SPI
+    MY_SPI.endTransaction();
+    //MY_SPI.end();   // DWADE DO NOT DO THIS!!! 
 }
 
 
@@ -165,7 +167,7 @@ void ELECHOUSE_CC1101::Reset(void)
     digitalWrite(SS_PIN, LOW);
 
     wait4MISO();
-    SPI.transfer(CC1101_SRES);
+    MY_SPI.transfer(CC1101_SRES);
     wait4MISO();
 
     digitalWrite(SS_PIN, HIGH);
@@ -190,8 +192,9 @@ void ELECHOUSE_CC1101::Init(void)
     digitalWrite(SS_PIN, HIGH);
     digitalWrite(SCK_PIN, HIGH);
     digitalWrite(MOSI_PIN, LOW);
+    
 
-    SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
+    MY_SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN);
 
     //SpiStart();     //spi initialization
 
@@ -216,8 +219,8 @@ void ELECHOUSE_CC1101::SpiWriteReg(byte addr, byte value)
 
     wait4MISO();
 
-    SPI.transfer(addr);
-    SPI.transfer(value);
+    MY_SPI.transfer(addr);
+    MY_SPI.transfer(value);
     digitalWrite(SS_PIN, HIGH);
     SpiEnd();
 }
@@ -239,10 +242,10 @@ void ELECHOUSE_CC1101::SpiWriteBurstReg(byte addr, byte *buffer, byte num)
 
     wait4MISO();
     
-    SPI.transfer(temp);
+    MY_SPI.transfer(temp);
 
     for (i = 0; i < num; i++)
-        SPI.transfer(buffer[i]);
+        MY_SPI.transfer(buffer[i]);
 
     digitalWrite(SS_PIN, HIGH);
     SpiEnd();
@@ -262,7 +265,7 @@ void ELECHOUSE_CC1101::SpiStrobe(byte strobe)
 
     wait4MISO();
     
-    SPI.transfer(strobe);
+    MY_SPI.transfer(strobe);
     digitalWrite(SS_PIN, HIGH);
 
     SpiEnd();
@@ -285,8 +288,8 @@ byte ELECHOUSE_CC1101::SpiReadReg(byte addr)
 
     wait4MISO();
 
-    SPI.transfer(temp);
-    value = SPI.transfer(0);
+    MY_SPI.transfer(temp);
+    value = MY_SPI.transfer(0);
     digitalWrite(SS_PIN, HIGH);
 
     SpiEnd();
@@ -310,10 +313,10 @@ void ELECHOUSE_CC1101::SpiReadBurstReg(byte addr, byte *buffer, byte num)
 
     wait4MISO();
 
-    SPI.transfer(temp);
+    MY_SPI.transfer(temp);
 
     for (i = 0; i < num; i++)
-        buffer[i] = SPI.transfer(0);
+        buffer[i] = MY_SPI.transfer(0);
 
     digitalWrite(SS_PIN, HIGH);
     SpiEnd();
@@ -336,8 +339,8 @@ byte ELECHOUSE_CC1101::SpiReadStatus(byte addr)
 
 	wait4MISO();
 
-    SPI.transfer(temp);
-    value = SPI.transfer(0);
+    MY_SPI.transfer(temp);
+    value = MY_SPI.transfer(0);
 
     digitalWrite(SS_PIN, HIGH);
     SpiEnd();
@@ -346,7 +349,7 @@ byte ELECHOUSE_CC1101::SpiReadStatus(byte addr)
 
 
 /****************************************************************
-* FUNCTION NAME:SPI pin Settings
+* FUNCTION NAME:MY_SPI pin Settings
 * FUNCTION     :Set Spi pins
 * INPUT        :none
 * OUTPUT       :none
@@ -376,7 +379,7 @@ void ELECHOUSE_CC1101::setSpi(void)
 
 
 /****************************************************************
-* FUNCTION NAME:CUSTOM SPI
+* FUNCTION NAME:CUSTOM MY_SPI
 * FUNCTION     :set custom spi pins.
 * INPUT        :none
 * OUTPUT       :none
@@ -393,7 +396,7 @@ void ELECHOUSE_CC1101::setSpiPin(byte sck, byte miso, byte mosi, byte ss)
 
 
 /****************************************************************
-* FUNCTION NAME:CUSTOM SPI
+* FUNCTION NAME:CUSTOM MY_SPI
 * FUNCTION     :set custom spi pins.
 * INPUT        :none
 * OUTPUT       :none
@@ -692,6 +695,11 @@ void ELECHOUSE_CC1101::setOSCdrift(float hz)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
+float ELECHOUSE_CC1101::getMHZ(void)
+{
+	return gMHz;
+}
+
 void ELECHOUSE_CC1101::setMHZ(float mhz)
 {
     byte freq2 = 0;

@@ -16,6 +16,15 @@
 // This code will ONLY work with ESP32 board
 //
 
+
+// fix for m5core gpio not defined
+//#include "soc/gpio_struct.h"
+//#include "hal/gpio_ll.h"
+//----
+
+
+#include <M5Unified.h>
+
 #define LINE Serial.printf("%s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
 
 #include "ELECHOUSE_CC1101_SRC_DRV.h"
@@ -27,7 +36,7 @@
 #define EPROMSIZE 512               // Size of EEPROM in your Arduino chip. For ESP32 it is Flash simulated so very slow
 #define BUF_LENGTH 128              // Buffer for the incoming command.
 
-#define DEFAULT_TxFREQ 866.912 //903 //868.0 //903.00
+#define DEFAULT_TxFREQ 866.933 //903 //868.0 //903.00
 
 #define DEFAULT_RxFREQ 867.3875
 
@@ -172,13 +181,13 @@ static void cc1101initialize(void)
     ELECHOUSE_cc1101.setGDO0(gdo0);         // set lib internal gdo pin (gdo0). Gdo2 not use for this example.
     ELECHOUSE_cc1101.setCCMode(1);          // set config for internal transmission mode. value 0 is for RAW recording/replaying
 
-    ELECHOUSE_cc1101.setModulation(2);      // set modulation mode. 0 = 2-FSK, 1 = GFSK, 2 = ASK/OOK, 3 = 4-FSK, 4 = MSK.
-    ELECHOUSE_cc1101.setMHZ(DEFAULT_TxFREQ);  // Here you can set your basic frequency. The lib calculates the frequency automatically (default = 433.92).The cc1101 can: 300-348 MHZ, 387-464MHZ and 779-928MHZ. Read More info from datasheet.
-    ELECHOUSE_cc1101.setDeviation(12.5);    // Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.
-    ELECHOUSE_cc1101.setChannel(0);         // Set the Channelnumber from 0 to 255. Default is cahnnel 0.
+    ELECHOUSE_cc1101.setModulation(3);      	// set modulation mode. 0 = 2-FSK, 1 = GFSK, 2 = ASK/OOK, 3 = 4-FSK, 4 = MSK.
+    ELECHOUSE_cc1101.setMHZ(DEFAULT_TxFREQ);  	// Here you can set your basic frequency. The lib calculates the frequency automatically (default = 433.92).The cc1101 can: 300-348 MHZ, 387-464MHZ and 779-928MHZ. Read More info from datasheet.
+    ELECHOUSE_cc1101.setDeviation(1.8);    		// Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.
+    ELECHOUSE_cc1101.setChannel(0);         	// Set the Channelnumber from 0 to 255. Default is cahnnel 0.
 
     ELECHOUSE_cc1101.setChsp(199.95);       // The channel spacing is multiplied by the channel number CHAN and added to the base frequency in kHz. Value from 25.39 to 405.45. Default is 199.95 kHz.
-    ELECHOUSE_cc1101.setRxBW(812.50);       // Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
+    ELECHOUSE_cc1101.setRxBW(58.3);       // Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
     ELECHOUSE_cc1101.setDRate(.3);         // Set the Data Rate in kBaud. Value from 0.02 to 1621.83. Default is 99.97 kBaud!
     ELECHOUSE_cc1101.setPA(-6);             // Set TxPower. The following settings are possible depending on the frequency band.  (-30  -20  -15  -10  -6    0    5    7    10   11   12) Default is max!
 
@@ -949,8 +958,10 @@ static void exec(char *cmdline)
     else if (strcmp_P(command, PSTR("recraw")) == 0)
     {
         // take interval period for samplink
-        setting = atoi(cmdline);
-
+        //setting = atoi(cmdline);
+        
+		setting =  (1.e6/9600);
+		
         if (setting > 0)
         {
             // setup async mode on CC1101 with GDO0 pin processing
@@ -969,8 +980,7 @@ static void exec(char *cmdline)
 
             // waiting for some data first or serial port signal
             //while (!Serial.available() ||  (digitalRead(gdo0) == LOW) );
-            while (digitalRead(gdo0) == LOW)
-                ;
+            while (digitalRead(gdo0) == LOW);
 
             //start recording to the buffer with bitbanging of GDO0 pin state
             Serial.print(F("\r\nStarting RAW recording to the buffer...\r\n"));
@@ -1008,7 +1018,8 @@ static void exec(char *cmdline)
     else if (strcmp_P(command, PSTR("rxraw")) == 0)
     {
         // take interval period for samplink
-        setting = atoi(cmdline);
+        //setting = atoi(cmdline);
+		setting =  (1.e6/9600);
 
         if (setting > 0)
         {
@@ -1507,6 +1518,14 @@ static void exec(char *cmdline)
 }
 
 
+// include the library                                                                     
+#include <_m5Core2-only.h>
+//#include <M5Unified.h>
+#include <_viewController.h>
+#include "built_on.h"
+
+
+
 void setup()
 {
 
@@ -1517,6 +1536,11 @@ void setup()
     // initialize USB Serial Port CDC
     Serial.begin(115200);
     delay(3000);
+
+	_setup_M5();
+	_lclear();
+	_cprintf(_GREEN, 0,	"%s", built_on);									   
+	
 
     Serial.println(F("CC1101 terminal tool connected, use 'help' for list of commands..."));
     Serial.println(F("(C) Adam Loboda 2023  "));
@@ -1536,7 +1560,8 @@ void setup()
     else
         Serial.println(F("cc1101 connection error! check the wiring."));
 
-    ;
+
+	_cprintf(_GREEN, 2,	"freq = %f", ELECHOUSE_cc1101.getMHZ());
 
     // setup variables
     bigrecordingbufferpos = 0;
