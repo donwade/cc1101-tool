@@ -44,24 +44,24 @@
 
 #if defined (ARDUINO_M5STACK_CORE2)
 
-byte mosi = 23;
-byte miso = 38;
-byte sck = 18;
+byte PIN_MOSI = 23;
+byte PIN_MISO = 38;
+byte PIN_SCK = 18;
 
-byte ss = 27;
+byte PIN_CS = 27;
 
-int gdo2 = 19;
-int gdo0 = 33;
+int PIN_GDO2 = 19;
+int PIN_GDO0 = 33;
 
 #elif defined (ARDUINO_M5STACK_CORES3)
-byte mosi = 37;
-byte miso = 35;
-byte sck = 36;
+byte PIN_MOSI = 37;
+byte PIN_MISO = 35;
+byte PIN_SCK = 36;
 
-byte ss = 5;
+byte PIN_CS = 5;
 
-int gdo2 = 10;
-int gdo0 = 7;
+int PIN_GDO2 = 10;
+int PIN_GDO0 = 7;
 
 #else
 #error unknown processor
@@ -173,12 +173,12 @@ int  hextoascii(byte *ascii_ptr, byte *hex_ptr, int len)
 static void cc1101initialize(void)
 {
     // initializing library with custom pins selected
-    ELECHOUSE_cc1101.setSpiPin(sck, miso, mosi, ss);
-    ELECHOUSE_cc1101.setGDO(gdo0, gdo2);
+    ELECHOUSE_cc1101.setSpiPin(PIN_SCK, PIN_MISO, PIN_MOSI, PIN_CS);
+    ELECHOUSE_cc1101.setGDO(PIN_GDO0, PIN_GDO2);
 
     // Main part to tune CC1101 with proper frequency, modulation and encoding
     ELECHOUSE_cc1101.Init();                // must be set to initialize the cc1101!
-    ELECHOUSE_cc1101.setGDO0(gdo0);         // set lib internal gdo pin (gdo0). Gdo2 not use for this example.
+    ELECHOUSE_cc1101.setGDO0(PIN_GDO0);         // set lib internal gdo pin (gdo0). Gdo2 not use for this example.
     ELECHOUSE_cc1101.setCCMode(1);          // set config for internal transmission mode. value 0 is for RAW recording/replaying
 
     ELECHOUSE_cc1101.setModulation(3);      	// set modulation mode. 
@@ -941,7 +941,7 @@ static void exec(char *cmdline)
 
             //start playing RF with setting GDO0 bit state with bitbanging
             Serial.print(F("\r\nStarting Brute Forcing press any key to stop...\r\n"));
-            pinMode(gdo0, OUTPUT);
+            pinMode(PIN_GDO0, OUTPUT);
 
             for (brute = 0; brute < poweroftwo ; brute++)
             {
@@ -949,7 +949,7 @@ static void exec(char *cmdline)
                 {
                     for (int j = (setting2 - 1); j > -1; j--)   // j bits in a value brute
                     {
-                        digitalWrite(gdo0, bitRead(brute, j));  // Set GDO0 according to actual brute force value
+                        digitalWrite(PIN_GDO0, bitRead(brute, j));  // Set GDO0 according to actual brute force value
                         delayMicroseconds(setting);             // delay for selected sampling interval
                     }
 
@@ -1047,15 +1047,15 @@ static void exec(char *cmdline)
 
             //start recording to the buffer with bitbanging of GDO0 pin state
             Serial.print(F("\r\nWaiting for radio signal to start RAW recording...\r\n"));
-            pinMode(gdo0, INPUT);
+            pinMode(PIN_GDO0, INPUT);
 
             // this is only for ESP32 boards because they are getting some noise on the beginning
-            setting2 = digitalRead(gdo0);
+            setting2 = digitalRead(PIN_GDO0);
             delayMicroseconds(1000);
 
             // waiting for some data first or serial port signal
             //while (!Serial.available() ||  (digitalRead(gdo0) == LOW) );
-            while (digitalRead(gdo0) == LOW);
+            while (digitalRead(PIN_GDO0) == LOW);
 
             //start recording to the buffer with bitbanging of GDO0 pin state
             Serial.print(F("\r\nStarting RAW recording to the buffer...\r\n"));
@@ -1066,7 +1066,7 @@ static void exec(char *cmdline)
 
                 for (int j = 7; j > -1; j--)                        // 8 bits in a byte
                 {
-                    bitWrite(receivedbyte, j, digitalRead(gdo0));   // Capture GDO0 state into the byte
+                    bitWrite(receivedbyte, j, digitalRead(PIN_GDO0));   // Capture GDO0 state into the byte
                     delayMicroseconds(setting);                     // delay for selected sampling interval
                 }
 
@@ -1104,7 +1104,7 @@ static void exec(char *cmdline)
             ELECHOUSE_cc1101.SetRx();
             //start recording to the buffer with bitbanging of GDO0 pin state
             Serial.print(F("\r\nSniffer enabled...\r\n"));
-            pinMode(gdo0, INPUT);
+            pinMode(PIN_GDO0, INPUT);
 
             // Any received char over Serial port stops printing  RF received bytes
             while (!Serial.available())
@@ -1117,7 +1117,7 @@ static void exec(char *cmdline)
 
                     for (int j = 7; j > -1; j--)                        // 8 bits in a byte
                     {
-                        bitWrite(receivedbyte, j, digitalRead(gdo0));   // Capture GDO0 state into the byte
+                        bitWrite(receivedbyte, j, digitalRead(PIN_GDO0));   // Capture GDO0 state into the byte
                         delayMicroseconds(setting);                     // delay for selected sampling interval
                     }
 
@@ -1173,7 +1173,7 @@ static void exec(char *cmdline)
             ELECHOUSE_cc1101.SetTx();
             //start replaying GDO0 bit state from data in the buffer with bitbanging
             Serial.print(F("\r\nReplaying RAW data from the buffer...\r\n"));
-            pinMode(gdo0, OUTPUT);
+            pinMode(PIN_GDO0, OUTPUT);
 
             for (int i = 1; i < RECORDINGBUFFERSIZE ; i++)
             {
@@ -1181,7 +1181,7 @@ static void exec(char *cmdline)
 
                 for (int j = 7; j > -1; j--)                        // 8 bits in a byte
                 {
-                    digitalWrite(gdo0, bitRead(receivedbyte, j));   // Set GDO0 according to recorded byte
+                    digitalWrite(PIN_GDO0, bitRead(receivedbyte, j));   // Set GDO0 according to recorded byte
                     delayMicroseconds(setting);                     // delay for selected sampling interval
                 }
 
