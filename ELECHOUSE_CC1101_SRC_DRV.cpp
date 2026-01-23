@@ -19,6 +19,20 @@
 
 #define LINE Serial.printf(">>> %s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
 
+SemaphoreHandle_t sem_DATA_READY = xSemaphoreCreateBinary();
+
+void (*GDO0_fallingCallback)();
+void (*GDO0_risingCallback)();
+void (*GDO2_fallingCallback)();
+void (*GDO2_risingCallback)();
+
+uint32_t irqUpCtrGDO0;
+uint32_t irqDnCtrGDO0;
+uint32_t irqUpCtrGDO2;
+uint32_t irqDnCtrGDO2;
+
+
+
 SPIClass MY_SPI( VSPI);
 
 /****************************************************************/
@@ -83,6 +97,49 @@ uint8_t PA_TABLE_868[10] { 0x03, 0x17, 0x1D, 0x26, 0x37, 0x50, 0x86, 0xCD, 0xC5,
 //                        -30  -20  -15  -10  -6    0    5    7    10   11
 uint8_t PA_TABLE_915[10] { 0x03, 0x0E, 0x1E, 0x27, 0x38, 0x8E, 0x84, 0xCC, 0xC3, 0xC0, };   //900 - 928
 
+
+
+ICACHE_RAM_ATTR void onGDO0_IRQ(void)
+{
+	if (digitalRead(GDO0))
+	{
+		if (GDO0_risingCallback)
+		{
+			irqUpCtrGDO0++;
+			GDO0_risingCallback();
+		}
+	}
+	else
+	{
+		if (GDO0_fallingCallback)
+		{
+			irqDnCtrGDO0++;
+			GDO0_fallingCallback();
+		}
+	}
+}
+
+ICACHE_RAM_ATTR void onGDO2_IRQ(void)
+{
+	if (digitalRead(GDO2))
+	{
+		if (GDO2_risingCallback)
+		{
+			irqUpCtrGDO2++;
+			GDO2_risingCallback();
+		}
+	}
+	else
+	{
+		if (GDO2_fallingCallback)
+		{
+			irqDnCtrGDO2++;
+			GDO2_fallingCallback();
+		}
+	}
+}
+
+
 void wait4MISO(void)
 {
 	//while(digitalRead(MISO_PIN));
@@ -135,6 +192,10 @@ void ELECHOUSE_CC1101::GDO_Set(void)
 {
     pinMode(GDO0, OUTPUT);
     pinMode(GDO2, INPUT);
+    
+    irqDirGDO0 = -1;
+    irqDirGDO2 = -1;
+    
 }
 
 
@@ -410,6 +471,194 @@ void ELECHOUSE_CC1101::addSpiPin(byte sck, byte miso, byte mosi, byte ss, byte m
     MOSI_PIN_M[modul] = mosi;
     SS_PIN_M[modul] = ss;
 }
+
+
+
+/****************************************************************
+* FUNCTION NAME:GDO0 IRQ falling callback
+****************************************************************/
+void ELECHOUSE_CC1101::setGDO0FallingCallback(void (*function_pointer_name)())
+{
+	GDO0_fallingCallback = function_pointer_name;
+	if (function_pointer_name)
+	{
+	    if (irqDirGDO0 == FALLING || irqDirGDO0 == CHANGE )
+	    {
+			Serial.printf("%s no change\n", __FUNCTION__);
+	    	return;
+	    }
+
+	    irqDnCtrGDO0 = 0;
+
+	    if (irqDirGDO0 == RISING) 
+	    {
+	    	// rising in use.
+	    	attachInterrupt(GDO0, onGDO0_IRQ, CHANGE);
+			irqDirGDO0 = CHANGE;
+			
+			irqDnCtrGDO0 = irqUpCtrGDO0 = 0;
+			Serial.printf("%s CHANGE mode\n", __FUNCTION__);
+	    	return;
+	    }
+
+	   	attachInterrupt(GDO0, onGDO0_IRQ, FALLING);
+	   	irqDirGDO0 = FALLING;
+		Serial.printf("%s FALLING mode\n", __FUNCTION__);
+	   	
+	}
+	else
+	{
+		//disconnecting.
+		if (irqDirGDO0 == FALLING )
+		{
+			detachInterrupt(GDO0);
+			
+			Serial.printf("%s DETACHED\n", __FUNCTION__);
+			return;
+		}
+		attachInterrupt(GDO0, onGDO0_IRQ, RISING);
+		Serial.printf("%s RISING mode\n", __FUNCTION__);
+		irqDirGDO0 = RISING;
+	}
+}
+
+/****************************************************************
+* FUNCTION NAME:GDO0 IRQ rising callback
+****************************************************************/
+void ELECHOUSE_CC1101::setGDO0RisingCallback(void (*function_pointer_name)())
+{
+	GDO0_risingCallback = function_pointer_name;
+	if (function_pointer_name)
+	{
+	    if (irqDirGDO0 == RISING || irqDirGDO0 == CHANGE ) 
+	    {
+	    	Serial.printf("%s no change\n", __FUNCTION__);
+	    	return;
+	    }
+		
+	    irqUpCtrGDO0 = 0;
+
+	    if (irqDirGDO0 == FALLING) 
+	    {
+	    	// rising in use.
+	    	attachInterrupt(GDO0, onGDO0_IRQ, CHANGE);
+			irqDnCtrGDO0 = irqUpCtrGDO0 = 0;
+			irqDirGDO0 = CHANGE;
+			Serial.printf("%s CHANGE mode\n", __FUNCTION__);
+	    	return;
+	    }
+
+	   	attachInterrupt(GDO0, onGDO0_IRQ, RISING);
+	   	irqDirGDO0 = RISING;
+		Serial.printf("%s RISING mode\n", __FUNCTION__);
+	}
+	else
+	{
+		//disconnecting.
+		if (irqDirGDO0 == RISING )
+		{
+	    	Serial.printf("%s DETACHING\n", __FUNCTION__);
+			detachInterrupt(GDO0);
+			return;
+		}
+		attachInterrupt(GDO0, onGDO0_IRQ, FALLING);
+		irqDirGDO0 = FALLING;
+		Serial.printf("%s no change\n", __FUNCTION__);
+	}
+}
+
+/****************************************************************
+* FUNCTION NAME:GDO2 IRQ falling callback
+****************************************************************/
+void ELECHOUSE_CC1101::setGDO2FallingCallback(void (*function_pointer_name)())
+{
+	GDO2_fallingCallback = function_pointer_name;
+	if (function_pointer_name)
+	{
+	    if (irqDirGDO2 == FALLING || irqDirGDO2 == CHANGE )
+	    {
+			Serial.printf("%s no change\n", __FUNCTION__);
+	    	return;
+	    }
+
+	    irqDnCtrGDO2 = 0;
+
+	    if (irqDirGDO2 == RISING) 
+	    {
+	    	// rising in use.
+	    	attachInterrupt(GDO2, onGDO2_IRQ, CHANGE);
+			irqDirGDO2 = CHANGE;
+			irqDnCtrGDO2 = irqUpCtrGDO2 = 0;
+			Serial.printf("%s CHANGE mode\n", __FUNCTION__);
+	    	return;
+	    }
+
+	   	attachInterrupt(GDO2, onGDO2_IRQ, FALLING);
+	   	irqDirGDO2 = FALLING;
+		Serial.printf("%s FALLING mode\n", __FUNCTION__);
+	   	
+	}
+	else
+	{
+		//disconnecting.
+		if (irqDirGDO2 == FALLING )
+		{
+			detachInterrupt(GDO2);
+			
+			Serial.printf("%s DETACHED\n", __FUNCTION__);
+			return;
+		}
+		attachInterrupt(GDO2, onGDO2_IRQ, RISING);
+		Serial.printf("%s RISING mode\n", __FUNCTION__);
+		irqDirGDO2 = RISING;
+	}
+}
+
+/****************************************************************
+* FUNCTION NAME:GDO2 IRQ rising callback
+****************************************************************/
+void ELECHOUSE_CC1101::setGDO2RisingCallback(void (*function_pointer_name)())
+{
+	GDO2_risingCallback = function_pointer_name;
+	if (function_pointer_name)
+	{
+	    if (irqDirGDO2 == RISING || irqDirGDO2 == CHANGE ) 
+	    {
+	    	Serial.printf("%s no change\n", __FUNCTION__);
+	    	return;
+	    }
+	    
+	    irqUpCtrGDO2 = 0;
+
+	    if (irqDirGDO2 == FALLING) 
+	    {
+	    	// rising in use.
+	    	attachInterrupt(GDO2, onGDO2_IRQ, CHANGE);
+			irqDnCtrGDO2 = irqUpCtrGDO2 = 0;
+			irqDirGDO2 = CHANGE;
+			Serial.printf("%s CHANGE mode\n", __FUNCTION__);
+	    	return;
+	    }
+
+	   	attachInterrupt(GDO2, onGDO2_IRQ, RISING);
+	   	irqDirGDO2 = RISING;
+		Serial.printf("%s RISING mode\n", __FUNCTION__);
+	}
+	else
+	{
+		//disconnecting.
+		if (irqDirGDO2 == RISING )
+		{
+	    	Serial.printf("%s DETACHING\n", __FUNCTION__);
+			detachInterrupt(GDO2);
+			return;
+		}
+		attachInterrupt(GDO2, onGDO2_IRQ, FALLING);
+		irqDirGDO2 = FALLING;
+		Serial.printf("%s no change\n", __FUNCTION__);
+	}
+}
+
 
 
 /****************************************************************
@@ -1893,60 +2142,3 @@ byte ELECHOUSE_CC1101::ReceiveData(byte *rxBuffer)
 
 ELECHOUSE_CC1101 ELECHOUSE_cc1101;
 
-/*
- #include <driver/spi_master.h>
- *
- * //#define CONFIG_M5CORES3_SPI_CONFLICT_FIX
- *
- * //#ifdef CONFIG_M5CORES3_SPI_CONFLICT_FIX
- *
- #define M5CORES3_SPI_CONFIG_FIX_MISO_PIN 35
- *
- * void sx127x_spi_pre_transfer_m5cores3_fix_callback(spi_transaction_t* t)
- * {
- *  // before a SPI transaction is started, we need to change the driving direction
- *  // of the DC pin in the CoreS3 (the CoreS3 uses the MISO pin as the DC pin and
- *  // configures it as an output ping which conflicts with other SPI devices on the bus)
- *
- *  // set gpio direction for MISO pin to input
- *  gpio_set_direction((gpio_num_t) M5CORES3_SPI_CONFIG_FIX_MISO_PIN, GPIO_MODE_INPUT);
- * }
- *
- * void sx127x_spi_post_transfer_m5cores3_fix_callback(spi_transaction_t* t) {
- *  // undo pin direction change after SPI transaction is done
- *
- *  // set gpio direction for MISO pin back to output
- *  gpio_set_direction((gpio_num_t) M5CORES3_SPI_CONFIG_FIX_MISO_PIN, GPIO_MODE_OUTPUT);
- * }
- *
- * typedef int sx127x_handle_t;
- *
- * //sx127x_handle_t sx127x_init(const sx127x_modem_config_t* modem_config)
- * sx127x_handle_t sx127x_init(const int modem_config)
- * {
- *  // ...
- *
- *  // Configure SPI device
- *  spi_device_interface_config_t spi_dev_cfg = {
- *      .clock_speed_hz = 9000000,  // 9MHz
- *      .mode = 0,
- *              .spics_io_num = 6, //modem_config->cs_gpio,
- *              //.spics_io_num = modem_config->cs_gpio,
- *      .queue_size = 7,
- *      .flags = 0,
- #ifdef CONFIG_M5CORES3_SPI_CONFLICT_FIX
- *      .pre_cb = sx127x_spi_pre_transfer_m5cores3_fix_callback,
- *      .post_cb = sx127x_spi_post_transfer_m5cores3_fix_callback
- #endif
- *  };
- *  int ret = spi_bus_add_device(spi_host, &spi_dev_cfg, &device->spi);
- *  if (ret != ESP_OK) {
- *      ESP_LOGE(TAG, "Failed to add SPI device");
- *      vSemaphoreDelete(device->spi_mutex);
- *      free(device);
- *      return NULL;
- *  }
- *
- *  // ...
- * }
- */

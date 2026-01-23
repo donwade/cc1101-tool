@@ -143,6 +143,11 @@ void setPA(int p);
 void setMHZ(float mhz);
 float getMHZ(void);
 
+void setGDO0FallingCallback(void (*usrCallback)());
+void setGDO0RisingCallback(void (*usrCallback)());
+void setGDO2FallingCallback(void (*usrCallback)());
+void setGDO2RisingCallback(void (*usrCallback)());
+
 void setOSCdrift(float hz);
 void setChannel(byte chnl);
 void setChsp(float f);
@@ -190,7 +195,21 @@ void setCRC_AF(bool v);
 void setAppendStatus(bool v);
 void setAdrChk(byte v);
 bool CheckRxFifo(int t);
+
+private:
+
+    int irqDirGDO0;
+    int irqDirGDO2;
+    
+
 };
+
+extern uint32_t irqUpCtrGDO0;
+extern uint32_t irqDnCtrGDO0;
+extern uint32_t irqUpCtrGDO2;
+extern uint32_t irqDnCtrGDO2;
+
+
 
 extern ELECHOUSE_CC1101 ELECHOUSE_cc1101;
 

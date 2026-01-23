@@ -168,13 +168,19 @@ int  hextoascii(byte *ascii_ptr, byte *hex_ptr, int len)
     return i;
 }
 
+void doesNothing(void)
+{
+	return;
+}
 
 // Initialize CC1101 board with default settings, you may change your preferences here
 static void cc1101initialize(void)
 {
+
     // initializing library with custom pins selected
     ELECHOUSE_cc1101.setSpiPin(PIN_SCK, PIN_MISO, PIN_MOSI, PIN_CS);
     ELECHOUSE_cc1101.setGDO(PIN_GDO0, PIN_GDO2);
+
 
     // Main part to tune CC1101 with proper frequency, modulation and encoding
     ELECHOUSE_cc1101.Init();                // must be set to initialize the cc1101!
@@ -1060,6 +1066,9 @@ static void exec(char *cmdline)
             //start recording to the buffer with bitbanging of GDO0 pin state
             Serial.print(F("\r\nStarting RAW recording to the buffer...\r\n"));
 
+			ELECHOUSE_cc1101.setGDO0FallingCallback(doesNothing);
+			ELECHOUSE_cc1101.setGDO0RisingCallback(doesNothing);
+
             for (int i = 0; i < RECORDINGBUFFERSIZE ; i++)
             {
                 byte receivedbyte = 0;
@@ -1075,7 +1084,12 @@ static void exec(char *cmdline)
                 bigrecordingbuffer[i] = receivedbyte;
             }
 
-            Serial.print(F("\r\nRecording RAW data complete.\r\n"));
+            Serial.printf("\nRecording RAW data complete. up=%d dn=%d\n", irqUpCtrGDO0, irqDnCtrGDO0);
+
+			ELECHOUSE_cc1101.setGDO0FallingCallback(NULL);
+			ELECHOUSE_cc1101.setGDO0RisingCallback(NULL);
+
+            
             // setting normal pkt format again
             ELECHOUSE_cc1101.setCCMode(1);
             ELECHOUSE_cc1101.setPktFormat(0);
@@ -1106,6 +1120,9 @@ static void exec(char *cmdline)
             Serial.print(F("\r\nSniffer enabled...\r\n"));
             pinMode(PIN_GDO0, INPUT);
 
+			ELECHOUSE_cc1101.setGDO0FallingCallback(doesNothing);
+			ELECHOUSE_cc1101.setGDO0RisingCallback(doesNothing);
+
             // Any received char over Serial port stops printing  RF received bytes
             while (!Serial.available())
             {
@@ -1135,14 +1152,14 @@ static void exec(char *cmdline)
                     Serial.print((char *)hexBuffer);
                 }
 
-                ;
 
+            }; // end of While loop
 
-            }
+            Serial.printf("\nStopping the sniffer. up=%d dn=%d \n", irqUpCtrGDO0, irqDnCtrGDO0);
+            
+			ELECHOUSE_cc1101.setGDO0FallingCallback(NULL);
+			ELECHOUSE_cc1101.setGDO0RisingCallback(NULL);
 
-            ; // end of While loop
-
-            Serial.print(F("\r\nStopping the sniffer.\n"));
 
             // setting normal pkt format again
             ELECHOUSE_cc1101.setCCMode(1);
@@ -1184,8 +1201,6 @@ static void exec(char *cmdline)
                     digitalWrite(PIN_GDO0, bitRead(receivedbyte, j));   // Set GDO0 according to recorded byte
                     delayMicroseconds(setting);                     // delay for selected sampling interval
                 }
-
-                ;
             }
 
             Serial.print(F("\r\nReplaying RAW data complete.\r\n"));
@@ -1598,7 +1613,6 @@ static void exec(char *cmdline)
 //#include <M5Unified.h>
 #include <_viewController.h>
 #include "built_on.h"
-
 
 
 void setup()
