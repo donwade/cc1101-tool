@@ -745,7 +745,52 @@ void ELECHOUSE_CC1101::setModul(byte modul)
     }
 }
 
+//------------------
+typedef struct { 
+	int num;
+	char *msg;
+}PIN_DEF;
 
+PIN_DEF pin_defs[] =
+{
+  { 0 ,"Associated to the RX FIFO\n\tAsserts when RX FIFO is filled at or above the RX FIFO threshold\n\tDe-asserts when RX FIFO is drained below the same"},
+  { 1 ,"Associated to the RX FIFO\n\tAsserts when RX FIFO is filled at or above the RX FIFO threshold or the end of packet is reached\n\tDe-asserts when t"},
+  { 2 ,"Associated to the TX FIFO\n\tAsserts when the TX FIFO is filled at or above the TX FIFO threshold\n\tDe-asserts when the TX FIFO is below the same"},
+  { 3 ,"Associated to the TX FIFO\n\tAsserts when TX FIFO is full\n\tDe-asserts when the TX FIFO is drained below the TX FIFO threshold."},
+  { 4 ,"Asserts when the RX FIFO has overflowed\n\tDe-asserts when the FIFO has been flushed."},
+  { 5 ,"Asserts when the TX FIFO has underflowed\n\tDe-asserts when the FIFO is flushed."},
+  { 6 ,"Asserts when sync word has been sent / received, and de-asserts at the end of the packet\n\tIn RX, the pin will also de-assert when a packet is"},
+  { 7 ,"Asserts when a packet has been received with CRC OK\n\tDe-asserts when the first byte is read from the RX FIFO."},
+  { 8 ,"Preamble Quality Reached\n\tAsserts when the PQI is above the programmed PQT value\n\tDe-asserted when the chip re- enters RX state (MARCSTATE=0x0"},
+  { 9 ,"Clear channel assessment\n\tHigh when RSSI level is below threshold (dependent on the current CCA_MODE setting)."},
+  {10 ,"Lock detector output\n\tThe PLL is in lock if the lock detector output has a positive transition or is constantly logic high\n\tTo check for PLL"},
+  {11 ,"Serial Clock\n\tSynchronous to the data in synchronous serial mode.	In RX mode, data is set up on the falling edge by CC1101 when GDOx_INV=0."},
+  {12 ,"Serial Synchronous Data Output\n\tUsed for synchronous serial mode."},
+  {13 ,"Serial Data Output\n\tUsed for asynchronous serial mode."},
+  {14 ,"Carrier sense\n\tHigh if RSSI level is above threshold\n\tCleared when entering IDLE mode."},
+  {15 ,"CRC_OK\n\tThe last CRC comparison matched\n\tCleared when entering/restarting RX mode."},
+  {22 ,"RX_HARD_DATA[1]\n\tCan be used together with RX_SYMBOL_TICK for alternative serial RX output."},
+  {23 ,"RX_HARD_DATA[0]\n\tCan be used together with RX_SYMBOL_TICK for alternative serial RX output."},
+  {27 ,"PA_PD\n\t Control an external PA or RX/TX switch (see pdf)"},
+  {28 ,"LNA_PD\n\tControl an external LNA or RX/TX switch (see pdf)"},
+  {29 ,"RX_SYMBOL_TICK\n\tCan be used together with RX_HARD_DATA for alternative serial RX output."},
+};
+
+//------------------
+void ELECHOUSE_CC1101::setIOPinConfig(uint8_t reg, uint8_t value)
+{
+	uint8_t end = sizeof(pin_defs)/sizeof(pin_defs[0]);
+	for (int i = 0; i < end; i++)
+	{
+		if (pin_defs[i].num != reg) continue;
+		Serial.printf("\n%s [%d]%s\n", pin_defs[i].num ? "GDO0":"GDO2", reg, pin_defs[i].msg);
+		break;
+	}
+	
+	SpiWriteReg(reg, value);
+
+	
+}
 /****************************************************************
 * FUNCTION NAME:CCMode
 * FUNCTION     :Format of RX and TX data
@@ -758,16 +803,16 @@ void ELECHOUSE_CC1101::setCCMode(bool s)
 
     if (ccmode == 1)
     {
-        SpiWriteReg(CC1101_IOCFG2, 0x0B);
-        SpiWriteReg(CC1101_IOCFG0, 0x06);
+        setIOPinConfig(CC1101_IOCFG2, 0x0B);
+        setIOPinConfig(CC1101_IOCFG0, 0x06);
         SpiWriteReg(CC1101_PKTCTRL0, 0x05);
         SpiWriteReg(CC1101_MDMCFG3, 0xF8);
         SpiWriteReg(CC1101_MDMCFG4, 11 + m4RxBw);
     }
     else
     {
-        SpiWriteReg(CC1101_IOCFG2, 0x0D);
-        SpiWriteReg(CC1101_IOCFG0, 0x0D);
+        setIOPinConfig(CC1101_IOCFG2, 0x0D);
+        setIOPinConfig(CC1101_IOCFG0, 0x0D);
         SpiWriteReg(CC1101_PKTCTRL0, 0x32);
         SpiWriteReg(CC1101_MDMCFG3, 0x93);
         SpiWriteReg(CC1101_MDMCFG4, 7 + m4RxBw);

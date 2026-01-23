@@ -142,6 +142,7 @@ void setModulation(byte m);
 void setPA(int p);
 void setMHZ(float mhz);
 float getMHZ(void);
+void setIOPinConfig(uint8_t reg, uint8_t value);
 
 void setGDO0FallingCallback(void (*usrCallback)());
 void setGDO0RisingCallback(void (*usrCallback)());
