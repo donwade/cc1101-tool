@@ -209,6 +209,8 @@ extern uint32_t irqUpCtrGDO0;
 extern uint32_t irqDnCtrGDO0;
 extern uint32_t irqUpCtrGDO2;
 extern uint32_t irqDnCtrGDO2;
+extern uint32_t irqDeltaTimeGDO0;
+extern uint32_t irqDeltaTimeGDO2;
 
 
 

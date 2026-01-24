@@ -31,6 +31,11 @@ uint32_t irqDnCtrGDO0;
 uint32_t irqUpCtrGDO2;
 uint32_t irqDnCtrGDO2;
 
+static uint32_t irqLastTimeGDO0;
+static uint32_t irqLastTimeGDO2;
+
+uint32_t irqDeltaTimeGDO0;
+uint32_t irqDeltaTimeGDO2;
 
 
 SPIClass MY_SPI( VSPI);
@@ -101,6 +106,11 @@ uint8_t PA_TABLE_915[10] { 0x03, 0x0E, 0x1E, 0x27, 0x38, 0x8E, 0x84, 0xCC, 0xC3,
 
 ICACHE_RAM_ATTR void onGDO0_IRQ(void)
 {
+	uint32_t now = micros();
+	
+	irqDeltaTimeGDO0 = now - irqLastTimeGDO0;
+	irqLastTimeGDO0 = now;
+	
 	if (digitalRead(GDO0))
 	{
 		if (GDO0_risingCallback)
@@ -121,6 +131,11 @@ ICACHE_RAM_ATTR void onGDO0_IRQ(void)
 
 ICACHE_RAM_ATTR void onGDO2_IRQ(void)
 {
+	uint32_t now = micros();
+	
+	irqDeltaTimeGDO2 = now - irqLastTimeGDO2;
+	irqLastTimeGDO2 = now;
+
 	if (digitalRead(GDO2))
 	{
 		if (GDO2_risingCallback)
@@ -1015,7 +1030,7 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
     gMHz = mhz;
 	mhz += tweakFreqHz/1e6;   // offset 20khz expressed in mhz
 
-	Serial.printf("tgt=%f adj=%f\n", gMHz, mhz);
+	Serial.printf("\ntgt=%f adj=%f\n", gMHz, mhz);
 	
     for (bool i = 0; i == 0;)
     {
@@ -1431,6 +1446,12 @@ void ELECHOUSE_CC1101::setPacketLength(byte v)
 {
     SpiWriteReg(CC1101_PKTLEN, v);
     Serial.printf("\n%s: packet length = %d\n", __FUNCTION__, v);
+
+    Serial.printf("\tWhen ***FIXED*** packet lengths ARE ENABLED.\n\n"
+    			  "\tIf variable packet length mode is used,\n"
+    			  "\tthis value indicates the maximum packet length allowed.\n"
+    			  "\tThis value must be different from 0.\n\n"
+    			  "\tIf INFINITE packet length is enabled this may be 0\n\n");
 }
 
 
