@@ -747,7 +747,7 @@ void ELECHOUSE_CC1101::setModul(byte modul)
 
 //------------------
 typedef struct { 
-	int num;
+	int opcode;
 	char *msg;
 }PIN_DEF;
 
@@ -759,12 +759,19 @@ PIN_DEF pin_defs[] =
   { 3 ,"Associated to the TX FIFO\n\tAsserts when TX FIFO is full\n\tDe-asserts when the TX FIFO is drained below the TX FIFO threshold."},
   { 4 ,"Asserts when the RX FIFO has overflowed\n\tDe-asserts when the FIFO has been flushed."},
   { 5 ,"Asserts when the TX FIFO has underflowed\n\tDe-asserts when the FIFO is flushed."},
-  { 6 ,"Asserts when sync word has been sent / received, and de-asserts at the end of the packet\n\tIn RX, the pin will also de-assert when a packet is"},
+
+  { 6 ,"Asserts when sync word has been sent/received\n"
+  		"\tDe-asserts at the end of the packet.\n\tIn RX, the pin will also de-assert when a packet is discarded due to\n"
+  		"\ta bad address\n\tmaximum length filtering\n"
+  		"\tthe radio enters RXFIFO_OVERFLOW state.\n\n"
+  		"\tIn TX the pin will de-assert if\n"
+  		"\tTX FIFO underflows."},
+
   { 7 ,"Asserts when a packet has been received with CRC OK\n\tDe-asserts when the first byte is read from the RX FIFO."},
   { 8 ,"Preamble Quality Reached\n\tAsserts when the PQI is above the programmed PQT value\n\tDe-asserted when the chip re- enters RX state (MARCSTATE=0x0"},
   { 9 ,"Clear channel assessment\n\tHigh when RSSI level is below threshold (dependent on the current CCA_MODE setting)."},
   {10 ,"Lock detector output\n\tThe PLL is in lock if the lock detector output has a positive transition or is constantly logic high\n\tTo check for PLL"},
-  {11 ,"Serial Clock\n\tSynchronous to the data in synchronous serial mode.	In RX mode, data is set up on the falling edge by CC1101 when GDOx_INV=0."},
+  {11 ,"Serial Clock\n\tSynchronous to the data in synchronous serial mode.\n\tIn RX mode, data is set up on the falling edge by CC1101 when GDOx_INV=0."},
   {12 ,"Serial Synchronous Data Output\n\tUsed for synchronous serial mode."},
   {13 ,"Serial Data Output\n\tUsed for asynchronous serial mode."},
   {14 ,"Carrier sense\n\tHigh if RSSI level is above threshold\n\tCleared when entering IDLE mode."},
@@ -776,16 +783,21 @@ PIN_DEF pin_defs[] =
   {29 ,"RX_SYMBOL_TICK\n\tCan be used together with RX_HARD_DATA for alternative serial RX output."},
 };
 
+
+
 //------------------
-void ELECHOUSE_CC1101::setIOPinConfig(uint8_t reg, uint8_t value)
+void ELECHOUSE_CC1101::setGDOxPinConfig(uint8_t reg, uint8_t value)
 {
+	int i;
 	uint8_t end = sizeof(pin_defs)/sizeof(pin_defs[0]);
-	for (int i = 0; i < end; i++)
+	for (i = 0; i < end; i++)
 	{
-		if (pin_defs[i].num != reg) continue;
-		Serial.printf("\n%s [%d]%s\n", pin_defs[i].num ? "GDO0":"GDO2", reg, pin_defs[i].msg);
+		if (pin_defs[i].opcode != value) continue;
+		Serial.printf("\n%s [0x%02X] %s\n", reg ? "GDO2":"GDO0", value, pin_defs[i].msg);
 		break;
 	}
+	
+	if (i == end) Serial.printf("\n%s [0x%02X] %s\n", reg ? "GDO2":"GDO0", value, "see documentation"); 
 	
 	SpiWriteReg(reg, value);
 
@@ -803,16 +815,16 @@ void ELECHOUSE_CC1101::setCCMode(bool s)
 
     if (ccmode == 1)
     {
-        setIOPinConfig(CC1101_IOCFG2, 0x0B);
-        setIOPinConfig(CC1101_IOCFG0, 0x06);
+        setGDOxPinConfig(CC1101_IOCFG2, 0x0B);
+        setGDOxPinConfig(CC1101_IOCFG0, 0x06);
         SpiWriteReg(CC1101_PKTCTRL0, 0x05);
         SpiWriteReg(CC1101_MDMCFG3, 0xF8);
         SpiWriteReg(CC1101_MDMCFG4, 11 + m4RxBw);
     }
     else
     {
-        setIOPinConfig(CC1101_IOCFG2, 0x0D);
-        setIOPinConfig(CC1101_IOCFG0, 0x0D);
+        setGDOxPinConfig(CC1101_IOCFG2, 0x0D);
+        setGDOxPinConfig(CC1101_IOCFG0, 0x0D);
         SpiWriteReg(CC1101_PKTCTRL0, 0x32);
         SpiWriteReg(CC1101_MDMCFG3, 0x93);
         SpiWriteReg(CC1101_MDMCFG4, 7 + m4RxBw);
@@ -1319,6 +1331,32 @@ void ELECHOUSE_CC1101::setPktFormat(byte v)
 
     pc0PktForm = v * 16;
     SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
+
+	Serial.println();
+    switch(v)
+    {
+    	case 0:
+    		Serial.printf("%s: (00)Normal mode, use FIFOs for RX and TX\n", __FUNCTION__);
+    	break;
+
+    	case 1:
+    		Serial.printf("%s: (01)Synchronous serial mode, Data in on GDO0 and "
+						  "data out on either of the GDOx pins", __FUNCTION__);
+		break;
+
+		case 2:
+			Serial.printf("%s: (02)random TX mode; sends random data using PN9\n", __FUNCTION__);
+		break;
+
+		case 3:
+			Serial.printf("%s: (03)Asynchronous serial mode\n\tdata in on GDO0 and "
+						  "data out on either of the GDOx pins\n", __FUNCTION__);
+		break;
+
+		default:
+			assert (pc0PktForm =! pc0PktForm);
+		break;
+	}
 }
 
 
@@ -1356,6 +1394,30 @@ void ELECHOUSE_CC1101::setLengthConfig(byte v)
 
     pc0LenConf = v;
     SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
+	Serial.println();
+	
+      switch(v)
+    {
+    	case 0:
+    		Serial.printf("%s: (00)Fixed packet length mode.\n\tLength configured in PKTLEN register\n", __FUNCTION__);
+    	break;
+
+    	case 1:
+    		Serial.printf("%s: (01)Variable packet length mode.\n\tPacket length configured by the first byte after sync word\n", __FUNCTION__);
+		break;
+
+		case 2:
+			Serial.printf("%s: (02)Infinite packet length mode\n", __FUNCTION__);
+		break;
+
+		case 3:
+			Serial.printf("%s: (03)Reserved\n", __FUNCTION__);
+		break;
+
+		default:
+			assert (pc0LenConf =! pc0LenConf);
+		break;
+	}
 }
 
 
@@ -1368,6 +1430,7 @@ void ELECHOUSE_CC1101::setLengthConfig(byte v)
 void ELECHOUSE_CC1101::setPacketLength(byte v)
 {
     SpiWriteReg(CC1101_PKTLEN, v);
+    Serial.printf("\n%s: packet length = %d\n", __FUNCTION__, v);
 }
 
 

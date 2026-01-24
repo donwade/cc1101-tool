@@ -1645,9 +1645,9 @@ void setup()
     cc1101initialize();
 
     if (ELECHOUSE_cc1101.getCC1101())      // Check the CC1101 Spi connection.
-        Serial.println(F("cc1101 initialized. Connection OK"));
+        Serial.printf("\ncc1101 initialized. Connection OK\n\n");
     else
-        Serial.println(F("cc1101 connection error! check the wiring."));
+        Serial.printf("\ncc1101 connection error! check the wiring.\n\n");
 
 
 	_cprintf(_GREEN, 2,	"freq = %f", ELECHOUSE_cc1101.getMHZ());
