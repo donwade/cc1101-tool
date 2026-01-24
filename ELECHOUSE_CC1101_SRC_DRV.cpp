@@ -198,15 +198,15 @@ void ELECHOUSE_CC1101::SpiEnd(void)
 
 
 /****************************************************************
-* FUNCTION NAME: GDO_Set()
+* FUNCTION NAME: GDOx_SetPinMode()
 * FUNCTION     : set GDO0,GDO2 pin for serial pinmode.
 * INPUT        : none
 * OUTPUT       : none
 ****************************************************************/
-void ELECHOUSE_CC1101::GDO_Set(void)
+void ELECHOUSE_CC1101::GDOx_SetPinMode(void)
 {
-    pinMode(GDO0, OUTPUT);
-    pinMode(GDO2, INPUT);
+    GDO0_SetPinMode(OUTPUT);
+    GDO2_SetPinMode(INPUT);
     
     irqDirGDO0 = -1;
     irqDirGDO2 = -1;
@@ -215,14 +215,21 @@ void ELECHOUSE_CC1101::GDO_Set(void)
 
 
 /****************************************************************
-* FUNCTION NAME: GDO_Set()
+* FUNCTION NAME: GDO0_SetPinMode()
 * FUNCTION     : set GDO0 for internal transmission mode.
 * INPUT        : none
 * OUTPUT       : none
 ****************************************************************/
-void ELECHOUSE_CC1101::GDO0_Set(void)
+void ELECHOUSE_CC1101::GDO0_SetPinMode(int8_t direction)
 {
-    pinMode(GDO0, INPUT);
+	Serial.printf("\nGDO0 pin set to %s\n", direction == INPUT? "INPUT":"OUTPUT");
+    pinMode(GDO0, direction);
+}
+
+void ELECHOUSE_CC1101::GDO2_SetPinMode(int8_t direction)
+{
+	Serial.printf("\nGDO2 pin set to %s\n", direction == INPUT? "INPUT":"OUTPUT");
+    pinMode(GDO2, direction);
 }
 
 
@@ -682,12 +689,12 @@ void ELECHOUSE_CC1101::setGDO2RisingCallback(void (*function_pointer_name)())
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setGDO(byte gdo0, byte gdo2)
+void ELECHOUSE_CC1101::setGDOx(byte gdo0, byte gdo2)
 {
 	LINE;
     GDO0 = gdo0;
     GDO2 = gdo2;
-    GDO_Set();
+    GDOx_SetPinMode();
 }
 
 
@@ -701,63 +708,7 @@ void ELECHOUSE_CC1101::setGDO0(byte gdo0)
 {
 	LINE;
     GDO0 = gdo0;
-    GDO0_Set();
-}
-
-
-/****************************************************************
-* FUNCTION NAME:GDO Pin settings
-* FUNCTION     :add GDO Pins
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::addGDO(byte gdo0, byte gdo2, byte modul)
-{
-	LINE;
-    GDO0_M[modul] = gdo0;
-    GDO2_M[modul] = gdo2;
-    gdo_set = 2;
-    GDO_Set();
-}
-
-
-/****************************************************************
-* FUNCTION NAME:add GDO0 Pin
-* FUNCTION     :add GDO0 Pin
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::addGDO0(byte gdo0, byte modul)
-{
-	LINE;
-    GDO0_M[modul] = gdo0;
-    gdo_set = 1;
-    GDO0_Set();
-}
-
-
-/****************************************************************
-* FUNCTION NAME:set Modul
-* FUNCTION     :change modul
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::setModul(byte modul)
-{
-    SCK_PIN = SCK_PIN_M[modul];
-    MISO_PIN = MISO_PIN_M[modul];
-    MOSI_PIN = MOSI_PIN_M[modul];
-    SS_PIN = SS_PIN_M[modul];
-
-    if (gdo_set == 1)
-    {
-        GDO0 = GDO0_M[modul];
-    }
-    else if (gdo_set == 2)
-    {
-        GDO0 = GDO0_M[modul];
-        GDO2 = GDO2_M[modul];
-    }
+    GDO0_SetPinMode(INPUT);
 }
 
 //------------------

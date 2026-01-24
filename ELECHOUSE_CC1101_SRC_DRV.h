@@ -116,8 +116,7 @@ class ELECHOUSE_CC1101
 private:
 void SpiStart(void);
 void SpiEnd(void);
-void GDO_Set(void);
-void GDO0_Set(void);
+void GDOx_SetPinMode(void);
 void Reset(void);
 void setSpi(void);
 void RegConfigSettings(void);
@@ -132,11 +131,8 @@ void Init(void);
 byte SpiReadStatus(byte addr);
 void setSpiPin(byte sck, byte miso, byte mosi, byte ss);
 void addSpiPin(byte sck, byte miso, byte mosi, byte ss, byte modul);
-void setGDO(byte gdo0, byte gdo2);
+void setGDOx(byte gdo0, byte gdo2);
 void setGDO0(byte gdo0);
-void addGDO(byte gdo0, byte gdo2, byte modul);
-void addGDO0(byte gdo0, byte modul);
-void setModul(byte modul);
 void setCCMode(bool s);
 void setModulation(byte m);
 void setPA(int p);
@@ -196,6 +192,8 @@ void setCRC_AF(bool v);
 void setAppendStatus(bool v);
 void setAdrChk(byte v);
 bool CheckRxFifo(int t);
+void GDO0_SetPinMode(int8_t direction = INPUT);
+void GDO2_SetPinMode(int8_t direction = INPUT);
 
 private:
 
