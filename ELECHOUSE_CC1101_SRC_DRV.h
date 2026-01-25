@@ -13,10 +13,32 @@
  * cc1101 Driver for RC Switch. Mod by Little Satan. With permission to modify and publish Wilson Shen (ELECHOUSE).
  * ----------------------------------------------------------------------------------------------------------------
  */
+#include <stdint.h>
 #ifndef ELECHOUSE_CC1101_SRC_DRV_h
 #define ELECHOUSE_CC1101_SRC_DRV_h
 
 #include <Arduino.h>
+
+typedef enum 
+{
+    LEGACY_0,
+    LEGACY_1,
+    DONS_MODE
+}eGDIO_MODES;
+
+typedef enum {
+    TRIG_NONE = 0,
+    TRIG_RISING = 1,
+    TRIG_FALLING = 2,                                                             
+    TRIG_BOTH = 3,
+    TRIG_LOW = 4,
+    TRIG_HIGH = 5 
+} eIRQ_TRIGGER;
+typedef enum {
+    MODEM_IDLE,
+    MODEM_TX,
+    MODEM_RX
+}eMODEM_STATE;
 
 //***************************************CC1101 define**************************************************//
 // CC1101 CONFIG REGSITER
@@ -114,6 +136,7 @@
 class ELECHOUSE_CC1101
 {
 private:
+void _regRMW(const char *name, uint8_t register, uint8_t val, uint8_t LHS, uint8_t RHS);
 void SpiStart(void);
 void SpiEnd(void);
 void GDOx_SetPinMode(void);
@@ -127,13 +150,15 @@ void Split_MDMCFG1(void);
 void Split_MDMCFG2(void);
 void Split_MDMCFG4(void);
 public:
+void DumpRegs(void);
 void Init(void);
 byte SpiReadStatus(byte addr);
 void setSpiPin(byte sck, byte miso, byte mosi, byte ss);
 void addSpiPin(byte sck, byte miso, byte mosi, byte ss, byte modul);
 void setGDOx(byte gdo0, byte gdo2);
 void setGDO0(byte gdo0);
-void setCCMode(bool s);
+void setTxFifoThreshold(uint8_t v);
+void setCCMode(eGDIO_MODES s);
 void setModulation(byte m);
 void setPA(int p);
 void setMHZ(float mhz);
@@ -146,15 +171,14 @@ void setGDO2FallingCallback(void (*usrCallback)());
 void setGDO2RisingCallback(void (*usrCallback)());
 
 void setOSCdrift(float hz);
-void setChannel(byte chnl);
+void setChannelNumber(byte chnl);
 void setChsp(float f);
 void setRxBW(float f);
 void setDRate(float d);
 void setDeviation(float d);
-void SetTx(void);
-void SetRx(void);
-void SetTx(float mhz);
-void SetRx(float mhz);
+void EnterTxMode(void);
+void EnterRxMode(void);
+void EnterRxMode(float mhz);
 int getRssi(void);
 byte getLqi(void);
 void setSres(void);
@@ -164,17 +188,19 @@ void SendData(byte *txBuffer, byte size);
 void SendData(char *txchar);
 void SendData(byte *txBuffer, byte size, int t);
 void SendData(char *txchar, int t);
+void SendData(String &txchar);
+
 byte CheckReceiveFlag(void);
 byte ReceiveData(byte *rxBuffer);
 bool CheckCRC(void);
 void SpiStrobe(byte strobe);
-void SpiWriteReg(byte addr, byte value);
+void _SpiWriteReg(const char*name, byte addr, byte value);
 void SpiWriteBurstReg(byte addr, byte *buffer, byte num);
 byte SpiReadReg(byte addr);
 void SpiReadBurstReg(byte addr, byte *buffer, byte num);
 void setClb(byte b, byte s, byte e);
 bool getCC1101(void);
-byte getMode(void);
+eMODEM_STATE getMode(void);
 void setSyncWord(byte sh, byte sl);
 void setAddr(byte v);
 void setWhiteData(bool v);

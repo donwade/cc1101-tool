@@ -185,7 +185,7 @@ static void cc1101initialize(void)
     // Main part to tune CC1101 with proper frequency, modulation and encoding
     ELECHOUSE_cc1101.Init();                // must be set to initialize the cc1101!
     ELECHOUSE_cc1101.setGDO0(PIN_GDO0);         // set lib internal gdo pin (gdo0). Gdo2 not use for this example.
-    ELECHOUSE_cc1101.setCCMode(1);          // set config for internal transmission mode. value 0 is for RAW recording/replaying
+    ELECHOUSE_cc1101.setCCMode(LEGACY_1);          // set config for internal transmission mode. value 0 is for RAW recording/replaying
 
     ELECHOUSE_cc1101.setModulation(3);      	// set modulation mode. 
     											//	0 = 2-FSK, 
@@ -197,7 +197,7 @@ static void cc1101initialize(void)
     ELECHOUSE_cc1101.setMHZ(DEFAULT_TxFREQ);  	// Here you can set your basic frequency. The lib calculates the frequency automatically (default = 433.92).The cc1101 can: 300-348 MHZ, 387-464MHZ and 779-928MHZ. Read More info from datasheet.
     ELECHOUSE_cc1101.setDeviation(1.8);    		// Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.
     
-    ELECHOUSE_cc1101.setChannel(0);         	// Set the Channelnumber from 0 to 255. Default is cahnnel 0.
+    ELECHOUSE_cc1101.setChannelNumber(0);         	// Set the Channelnumber from 0 to 255. Default is cahnnel 0.
 
     ELECHOUSE_cc1101.setChsp(199.95);       // The channel spacing is multiplied by the channel number CHAN and added to the base frequency in kHz. Value from 25.39 to 405.45. Default is 199.95 kHz.
     ELECHOUSE_cc1101.setRxBW(58.3);       	// Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
@@ -433,7 +433,7 @@ static void exec(char *cmdline)
     else if (strcmp_P(command, PSTR("setchannel")) == 0)
     {
         setting = atoi(cmdline);
-        ELECHOUSE_cc1101.setChannel(setting);
+        ELECHOUSE_cc1101.setChannelNumber(setting);
         Serial.print(F("\r\nChannel:"));
         Serial.print(setting);
         Serial.print(F("\r\n"));
@@ -772,7 +772,7 @@ static void exec(char *cmdline)
         // initialize parameters for scanning
         ELECHOUSE_cc1101.Init();
         ELECHOUSE_cc1101.setRxBW(58);
-        ELECHOUSE_cc1101.SetRx();
+        ELECHOUSE_cc1101.EnterRxMode();
 
         // Do scanning until some key pressed
         freq = startFreq;  // start frequency for scanning
@@ -876,7 +876,7 @@ static void exec(char *cmdline)
         }
         else if (receivingmode == 0)
         {
-            ELECHOUSE_cc1101.SetRx();
+            ELECHOUSE_cc1101.EnterRxMode();
             Serial.print(F("Enabled"));
             receivingmode = 1;
             jammingmode = 0;
@@ -941,9 +941,10 @@ static void exec(char *cmdline)
         {
             // setup async mode on CC1101 and go into TX mode
             // with GDO0 pin processing
-            ELECHOUSE_cc1101.setCCMode(0);
+            ELECHOUSE_cc1101.setCCMode(LEGACY_0);
             ELECHOUSE_cc1101.setPktFormat(3);
-            ELECHOUSE_cc1101.SetTx();
+            ELECHOUSE_cc1101.EnterTxMode();
+            
 
             //start playing RF with setting GDO0 bit state with bitbanging
             Serial.print(F("\r\nStarting Brute Forcing press any key to stop...\r\n"));
@@ -958,11 +959,7 @@ static void exec(char *cmdline)
                         digitalWrite(PIN_GDO0, bitRead(brute, j));  // Set GDO0 according to actual brute force value
                         delayMicroseconds(setting);             // delay for selected sampling interval
                     }
-
-                    ; // end of J loop
                 }
-
-                ; // end of K loop
 
                 // checking if key pressed
                 if (Serial.available())
@@ -973,19 +970,16 @@ static void exec(char *cmdline)
             Serial.print(F("\r\nBrute forcing complete.\r\n"));
 
             // setting normal pkt format again
-            ELECHOUSE_cc1101.setCCMode(1);
+            ELECHOUSE_cc1101.setCCMode(LEGACY_1);
             ELECHOUSE_cc1101.setPktFormat(0);
-            ELECHOUSE_cc1101.SetTx();
+            ELECHOUSE_cc1101.EnterTxMode();
             ELECHOUSE_cc1101.GDO0_SetPinMode(INPUT);
         } // end of IF
         else
         {
             Serial.print(F("Wrong parameters.\r\n"));
         }
-
-        ;
-
-
+ 
         // Handling TX command
     }
     else if (strcmp_P(command, PSTR("tx")) == 0)
@@ -1046,9 +1040,9 @@ static void exec(char *cmdline)
         if (setting > 0)
         {
             // setup async mode on CC1101 with GDO0 pin processing
-            ELECHOUSE_cc1101.setCCMode(0);
+            ELECHOUSE_cc1101.setCCMode(LEGACY_0);
             ELECHOUSE_cc1101.setPktFormat(3);
-            ELECHOUSE_cc1101.SetRx();
+            ELECHOUSE_cc1101.EnterRxMode();
 
 
             //start recording to the buffer with bitbanging of GDO0 pin state
@@ -1091,9 +1085,9 @@ static void exec(char *cmdline)
 
             
             // setting normal pkt format again
-            ELECHOUSE_cc1101.setCCMode(1);
+            ELECHOUSE_cc1101.setCCMode(LEGACY_1);
             ELECHOUSE_cc1101.setPktFormat(0);
-            ELECHOUSE_cc1101.SetRx();
+            ELECHOUSE_cc1101.EnterRxMode();
         }
         else
         {
@@ -1113,9 +1107,9 @@ static void exec(char *cmdline)
         if (setting > 0)
         {
             // setup async mode on CC1101 with GDO0 pin processing
-            ELECHOUSE_cc1101.setCCMode(0);
+            ELECHOUSE_cc1101.setCCMode(LEGACY_0);
             ELECHOUSE_cc1101.setPktFormat(3);
-            ELECHOUSE_cc1101.SetRx();
+            ELECHOUSE_cc1101.EnterRxMode();
             
             //start recording to the buffer with bitbanging of GDO0 pin state
             Serial.print(F("\r\nSniffer enabled...\r\n"));
@@ -1163,9 +1157,9 @@ static void exec(char *cmdline)
 
 
             // setting normal pkt format again
-            ELECHOUSE_cc1101.setCCMode(1);
+            ELECHOUSE_cc1101.setCCMode(LEGACY_1);
             ELECHOUSE_cc1101.setPktFormat(0);
-            ELECHOUSE_cc1101.SetRx();
+            ELECHOUSE_cc1101.EnterRxMode();
         }
         else
         {
@@ -1186,9 +1180,9 @@ static void exec(char *cmdline)
         {
             // setup async mode on CC1101 and go into TX mode
             // with GDO0 pin processing
-            ELECHOUSE_cc1101.setCCMode(0);
+            ELECHOUSE_cc1101.setCCMode(LEGACY_0);
             ELECHOUSE_cc1101.setPktFormat(3);
-            ELECHOUSE_cc1101.SetTx();
+            ELECHOUSE_cc1101.EnterTxMode();
 
             
             //start replaying GDO0 bit state from data in the buffer with bitbanging
@@ -1208,9 +1202,9 @@ static void exec(char *cmdline)
 
             Serial.print(F("\r\nReplaying RAW data complete.\r\n"));
             // setting normal pkt format again
-            ELECHOUSE_cc1101.setCCMode(1);
+            ELECHOUSE_cc1101.setCCMode(LEGACY_1);
             ELECHOUSE_cc1101.setPktFormat(0);
-            ELECHOUSE_cc1101.SetTx();
+            ELECHOUSE_cc1101.EnterTxMode();
             ELECHOUSE_cc1101.GDO0_SetPinMode(INPUT);
         }
         else
@@ -1384,7 +1378,7 @@ static void exec(char *cmdline)
         }
         else if (recordingmode == 0)
         {
-            ELECHOUSE_cc1101.SetRx();
+            ELECHOUSE_cc1101.EnterRxMode();
             Serial.print(F("Enabled"));
             bigrecordingbufferpos = 0;
 
@@ -1809,7 +1803,7 @@ void loop()
                 asciitohex(ccreceivingbuffer, hexBuffer, len);
                 Serial.print((char *)hexBuffer);
                 // set RX  mode again
-                ELECHOUSE_cc1101.SetRx();
+                ELECHOUSE_cc1101.EnterRxMode();
             }
 
             ;        // end of handling receiving mode
@@ -1829,7 +1823,7 @@ void loop()
                     // increase counter of frames stored
                     framesinbigrecordingbuffer++;
                     // set RX  mode again
-                    ELECHOUSE_cc1101.SetRx();
+                    ELECHOUSE_cc1101.EnterRxMode();
                 }
                 else
                 {
