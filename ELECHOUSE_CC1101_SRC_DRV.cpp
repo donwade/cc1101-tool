@@ -16,6 +16,7 @@
 #include <SPI.h>
 #include "ELECHOUSE_CC1101_SRC_DRV.h"
 #include <Arduino.h>
+#include "pretty.h"
 
 #define LINE Serial.printf(">>> %s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
 
@@ -373,9 +374,9 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value)
     MY_SPI.transfer(value);
     digitalWrite(SS_PIN, HIGH);
     SpiEnd();
-    Serial.printf("\033[0;31m");
+    Serial.printf(FG_BRED);
     Serial.printf("\n%s [0x%02X] %s\t%3d 0x%02X\n", __FUNCTION__, addr, name, value, value);
-    Serial.printf("\033[0m\n");
+    Serial.printf(_DONE);
 }
 
 
