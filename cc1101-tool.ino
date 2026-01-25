@@ -202,7 +202,7 @@ static void cc1101initialize(void)
     ELECHOUSE_cc1101.setChsp(199.95);       // The channel spacing is multiplied by the channel number CHAN and added to the base frequency in kHz. Value from 25.39 to 405.45. Default is 199.95 kHz.
     ELECHOUSE_cc1101.setRxBW(58.3);       	// Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
     
-    ELECHOUSE_cc1101.setDRate(4.8);         // Set the Data Rate in kBaud. Value from 0.02 to 1621.83. Default is 99.97 kBaud!
+    ELECHOUSE_cc1101.setDRateKhz(4.8);         // Set the Data Rate in kBaud. Value from 0.02 to 1621.83. Default is 99.97 kBaud!
     
     ELECHOUSE_cc1101.setPA(-6);             // Set TxPower. The following settings are possible depending on the frequency band.  (-30  -20  -15  -10  -6    0    5    7    10   11   12) Default is max!
 
@@ -463,7 +463,7 @@ static void exec(char *cmdline)
     else if (strcmp_P(command, PSTR("setdrate")) == 0)
     {
         startFreq = atof(cmdline);
-        ELECHOUSE_cc1101.setDRate(startFreq);
+        ELECHOUSE_cc1101.setDRateKhz(startFreq);
         Serial.print(F("\r\nDatarate: "));
         Serial.print(startFreq);
         Serial.print(F(" kbaud\r\n"));

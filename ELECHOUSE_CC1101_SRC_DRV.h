@@ -174,7 +174,7 @@ void setOSCdrift(float hz);
 void setChannelNumber(byte chnl);
 void setChsp(float f);
 void setRxBW(float f);
-void setDRate(float d);
+void setDRateKhz(float d);
 void setDeviation(float d);
 void EnterTxMode(void);
 void EnterRxMode(void);

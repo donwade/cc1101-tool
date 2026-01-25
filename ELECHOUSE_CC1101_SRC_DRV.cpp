@@ -106,13 +106,24 @@ uint8_t PA_TABLE_868[10] { 0x03, 0x17, 0x1D, 0x26, 0x37, 0x50, 0x86, 0xCD, 0xC5,
 uint8_t PA_TABLE_915[10] { 0x03, 0x0E, 0x1E, 0x27, 0x38, 0x8E, 0x84, 0xCC, 0xC3, 0xC0, };   //900 - 928
 
 
+template <typename T> void binary( T input)
+{
+	T copy = input;
+	for(int i = sizeof(T)*8 - 1; i > -1; i--)
+	{
+		Serial.printf("%d", !!(input & (1 << i)));
+	}
+}
 
-template <typename T> T regMask( T &final, T newVal, uint8_t lhs, uint8_t rhs)
+
+
+
+template <typename T> T regMask( T &final, T newField, uint8_t lhs, uint8_t rhs)
 {
 	T original = final;
 	T wide = (lhs - rhs) + 1;
 	T mask = 0;
-	T oldVal;
+	T oldField;
 	
 	assert (lhs >= rhs);
 	// make a bunch of ones
@@ -123,13 +134,16 @@ template <typename T> T regMask( T &final, T newVal, uint8_t lhs, uint8_t rhs)
 	}
 	mask = mask << rhs;
 
-	oldVal = (final & mask) >> rhs;
+	oldField = (final & mask) >> rhs;
 	
 	final &= ~mask;
-	final |= newVal << rhs;
+	final |= newField << rhs;
 #if 1
-	Serial.printf("\n\t%d:%d mask=0x%02X\n\toldVal=%02X newVal=%02X\n\toriginal=%02X final=%02X\n",
-					lhs, rhs, mask, oldVal, newVal, original, final);
+	Serial.printf("\n\tfield %d:%d  oldField=%02X newField=%02X\n",
+					lhs, rhs, oldField, newField);
+	Serial.printf("\tmask     = "); binary(mask); 		Serial.printf(" 0x%02X\n", mask);
+	Serial.printf("\toriginal = "); binary(original);	Serial.printf(" 0x%02X\n", original);
+	Serial.printf("\tfinal    = "); binary(final);		Serial.printf(" 0x%02X\n", final);
 #endif
 	return final;
 }
@@ -858,9 +872,10 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
         //SpiWriteReg(CC1101_PKTCTRL0, 0x05);
         setPktFormat(0);
         setLengthConfig(1);
-        
-        SpiWriteReg(CC1101_MDMCFG3, 0xF8);
-        SpiWriteReg(CC1101_MDMCFG4, 11 + m4RxBw);
+
+        setDRateKhz(0.097);
+        //SpiWriteReg(CC1101_MDMCFG3, 0xF8);
+        //SpiWriteReg(CC1101_MDMCFG4, 11 + m4RxBw);
     }
     else
     {
@@ -870,9 +885,10 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
         //SpiWriteReg(CC1101_PKTCTRL0, 0x32);
         setPktFormat(3);
         setLengthConfig(2);
-        
-        SpiWriteReg(CC1101_MDMCFG3, 0x93);
-        SpiWriteReg(CC1101_MDMCFG4, 7 + m4RxBw);
+
+		setDRateKhz(4.800);
+        //SpiWriteReg(CC1101_MDMCFG3, 0x93);
+        //SpiWriteReg(CC1101_MDMCFG4, 7 + m4RxBw);
     }
 
     setModulation(modulation);
@@ -1876,7 +1892,7 @@ void ELECHOUSE_CC1101::setRxBW(float rxBw)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setDRate(float dRate)
+void ELECHOUSE_CC1101::setDRateKhz(float dRate)
 {
 #if OEM_CODE
     Split_MDMCFG4();
