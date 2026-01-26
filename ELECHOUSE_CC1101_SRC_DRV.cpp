@@ -50,7 +50,7 @@ SPIClass MY_SPI( VSPI);
 
 byte modulation = 2;
 byte frend0;
-byte chan = 0;
+byte logical_chan = 0;
 int pa = 12;
 byte last_pa;
 byte SCK_PIN;
@@ -162,7 +162,7 @@ void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t bits
 	//Serial.printf("orig = 0x%02X  want = 0x%02X\n", orig, want);
 	
 	if(orig != want)
-		_SpiWriteReg(regName, regNum, want);
+		_SpiWriteReg(regName, regNum, want, 1); //silent
 }	
 
 void bin (unsigned char byte) {
@@ -378,7 +378,7 @@ void ELECHOUSE_CC1101::Init(void)
 * INPUT        :addr: register address; value: register value
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value)
+void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value, bool bQuiet)
 {
     SpiStart();
     digitalWrite(SS_PIN, LOW);
@@ -389,7 +389,7 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value)
     MY_SPI.transfer(value);
     digitalWrite(SS_PIN, HIGH);
     SpiEnd();
-    Serial.printf(FG_BRED "\n[0x%02X] %s = 0x%02X\n" _DONE, addr, name, value);
+    if (!bQuiet) Serial.printf(FG_BRED "\n[0x%02X] %s = 0x%02X\n" _DONE, addr, name, value);
 }
 
 
@@ -1292,6 +1292,7 @@ eMODEM_STATE ELECHOUSE_CC1101::getMode(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::setSyncWord(byte sh, byte sl)
 {
+	Serial.printf(FG_MAGENTA "\n%s: set sync word 0x%8X\n" _DONE, __FUNCTION__, sh << 8 + sl);
     SpiWriteReg(CC1101_SYNC1, sh);
     SpiWriteReg(CC1101_SYNC0, sl);
 }
@@ -1305,6 +1306,7 @@ void ELECHOUSE_CC1101::setSyncWord(byte sh, byte sl)
 ****************************************************************/
 void ELECHOUSE_CC1101::setAddr(byte v)
 {
+	Serial.printf(FG_MAGENTA "\n%s: set network addr = %d\n" _DONE, __FUNCTION__, v);
     SpiWriteReg(CC1101_ADDR, v);
 }
 
@@ -1343,6 +1345,7 @@ void ELECHOUSE_CC1101::setPQT(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setCRC_AF(bool v)
 {
+#if OEM_CODE
     Split_PKTCTRL1();
     pc1CRC_AF = 0;
 
@@ -1350,6 +1353,10 @@ void ELECHOUSE_CC1101::setCRC_AF(bool v)
         pc1CRC_AF = 8;
 
     SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
+#else
+	Serial.printf(FG_MAGENTA "\n%s: auto flush is %s\n" _DONE, __FUNCTION__, v ? "ENABLED":"DISABLED");
+	regRMW(CC1101_PKTCTRL1,v, 3, 3);
+#endif
 }
 
 
@@ -1505,6 +1512,7 @@ void ELECHOUSE_CC1101::setCrc(bool v)
 
     SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
 #else
+	Serial.printf(FG_MAGENTA "\n%s is %s\n" _DONE, __FUNCTION__, v ? "ENABLED" : "DISABLED");
 	regRMW(CC1101_PKTCTRL0, v , 2, 2);
 #endif
 }
@@ -1623,10 +1631,13 @@ void ELECHOUSE_CC1101::setTxFifoThreshold(uint8_t v)
 	}
 	i = i - 1;
 	
-	Serial.printf("%s : tx fifo warn wants %d gets %d {%d}\n", __FUNCTION__, v, tx_lvl[i], i);
-	delay(1000);
+	Serial.printf(FG_MAGENTA "%s : fifo warn RX @ %d or TX @ %d\n" _DONE, __FUNCTION__, rx_lvl[i], tx_lvl[i]);
+
     SpiWriteReg(CC1101_FIFOTHR, i);
-    SpiWriteReg(CC1101_IOCFG0, 2);  // GD00 signal on tx low
+
+    Serial.printf(FG_FRED " need to set GD0x if used\n" _DONE);
+    
+    //SpiWriteReg(CC1101_IOCFG0, 2);  // GD00 signal on tx low
 }
 
 /****************************************************************
@@ -1756,14 +1767,14 @@ void ELECHOUSE_CC1101::setNumPreambleBytes(byte v)
 #else
 	static const char *msg[] =
 	{
-		" 0 = 2",
-		" 1 = 3",
-		" 2 = 4",
-		" 3 = 6",
-		" 4 = 8",
-		" 5 = 12",
-		" 6 = 16",
-		" 7 = 24"
+		"(0) = 2",
+		"(1) = 3",
+		"(2) = 4",
+		"(3) = 6",
+		"(4) = 8",
+		"(5) = 12",
+		"(6) = 16",
+		"(7) = 24"
 	};
 	
 	Serial.printf(FG_MAGENTA "\n%s: %s bytes\n" _DONE, __FUNCTION__, msg[v]);
@@ -1779,11 +1790,11 @@ void ELECHOUSE_CC1101::setNumPreambleBytes(byte v)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setChannelNumber(byte ch)
+void ELECHOUSE_CC1101::setLogicalChanNum(byte ch)
 {
-    chan = ch;
-    Serial.printf(FG_MAGENTA "%s: chan=%d\n" _DONE, __FUNCTION__, ch);
-    SpiWriteReg(CC1101_CHANNR, chan);
+    logical_chan = ch;
+    Serial.printf(FG_MAGENTA "%s: logical chan=%d\n" _DONE, __FUNCTION__, ch);
+    SpiWriteReg(CC1101_CHANNR, logical_chan);
 }
 
 
@@ -2299,7 +2310,7 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
 
     SpiWriteReg(CC1101_MDMCFG1, 0x02);
     SpiWriteReg(CC1101_MDMCFG0, 0xF8);
-    SpiWriteReg(CC1101_CHANNR, chan);
+    SpiWriteReg(CC1101_CHANNR, logical_chan);
     SpiWriteReg(CC1101_DEVIATN, 0x47);
     SpiWriteReg(CC1101_FREND1, 0x56);
     SpiWriteReg(CC1101_MCSM0, 0x18);

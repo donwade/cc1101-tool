@@ -170,7 +170,7 @@ void setGDO2FallingCallback(void (*usrCallback)());
 void setGDO2RisingCallback(void (*usrCallback)());
 
 void setOSCdrift(float hz);
-void setChannelNumber(byte chnl);
+void setLogicalChanNum(byte chnl);
 void setChannelSpacing(float f);
 void setRxBW(float f);
 void setDataRateKhz(float d);
@@ -193,7 +193,7 @@ byte CheckReceiveFlag(void);
 byte ReceiveData(byte *rxBuffer);
 bool CheckCRC(void);
 void SpiStrobe(byte strobe);
-void _SpiWriteReg(const char*name, byte addr, byte value);
+void _SpiWriteReg(const char*name, byte addr, byte value, bool bQuiet=false);
 void SpiWriteBurstReg(byte addr, byte *buffer, byte num);
 byte SpiReadReg(byte addr);
 void SpiReadBurstReg(byte addr, byte *buffer, byte num);
