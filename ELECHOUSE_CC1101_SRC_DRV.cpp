@@ -1395,7 +1395,18 @@ void ELECHOUSE_CC1101::setAdrChk(byte v)
     pc1ADRCHK = v;
     SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
 #else
+	const char *msg[] = 
+	{
+		"(00)No address check",
+		"(01)Address check, no broadcast",
+		"(10)Address check and 0 (0x00) broadcast",
+		"(11)Address check and 0 (0x00) and 255 (0xFF)"
+	};
+	
    if (v > 3) v = 3;
+
+   Serial.printf(FG_BMAGENTA "\n%s %s\n" _DONE, __FUNCTION__, msg[v]);
+   
    regRMW(CC1101_PKTCTRL1, v, 1, 0);
 #endif
 
@@ -1682,7 +1693,20 @@ void ELECHOUSE_CC1101::setSyncMode(byte v)
     SpiWriteReg(CC1101_MDMCFG2, m2DCOFF + m2MODFM + m2MANCH + m2SYNCM);
 #else
    if (v > 7) v = 7;
-   Serial.printf(FG_MAGENTA "\n%s mode = %d\n" _DONE, __FUNCTION__, v);
+
+   static const char *msg[] =
+   {
+		"No preamble/sync. ",
+	   	"16 sync word bits detected. ",
+	   	"16/16 sync word bits detected. ",
+	   	"30/32 sync word bits detected. ",
+	   	"No preamble/sync, carrier-sense above threshold. ",
+	   	"15/16 + carrier-sense above threshold. ",
+	   	"16/16 + carrier-sense above threshold. ",
+	   	"30/32 + carrier-sense above threshold."
+   };
+   
+   Serial.printf(FG_MAGENTA "\n%s mode = %s\n" _DONE, __FUNCTION__, msg[v]);
    regRMW(CC1101_MDMCFG2, v , 2, 0);
 #endif
 }
@@ -1718,8 +1742,9 @@ void ELECHOUSE_CC1101::setFEC(bool v)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setPRE(byte v)
+void ELECHOUSE_CC1101::setNumPreambleBytes(byte v)
 {
+#if OEM_CODE
     Split_MDMCFG1();
     m1PRE = 0;
 
@@ -1728,6 +1753,23 @@ void ELECHOUSE_CC1101::setPRE(byte v)
 
     m1PRE = v * 16;
     SpiWriteReg(CC1101_MDMCFG1, m1FEC + m1PRE + m1CHSP);
+#else
+	static const char *msg[] =
+	{
+		" 0 = 2",
+		" 1 = 3",
+		" 2 = 4",
+		" 3 = 6",
+		" 4 = 8",
+		" 5 = 12",
+		" 6 = 16",
+		" 7 = 24"
+	};
+	
+	Serial.printf(FG_MAGENTA "\n%s: %s bytes\n" _DONE, __FUNCTION__, msg[v]);
+	regRMW(CC1101_MDMCFG1, v,6 ,4);
+	
+#endif
 }
 
 

@@ -270,7 +270,7 @@ static void cc1101initialize(void)
     										//		0 = Disable. 
     										//		1 = Enable.
     										
-    ELECHOUSE_cc1101.setPRE(0);             // Sets the minimum number of preamble bytes to be transmitted. 
+    ELECHOUSE_cc1101.setNumPreambleBytes(0);             // Sets the minimum number of preamble bytes to be transmitted. 
     										//		Values: 0 : 2, 
     										//				1 : 3, 
     										//				2 : 4,
@@ -701,7 +701,7 @@ static void exec(char *cmdline)
     else if (strcmp_P(command, PSTR("setpre")) == 0)
     {
         setting = atoi(cmdline);
-        ELECHOUSE_cc1101.setPRE(setting);
+        ELECHOUSE_cc1101.setNumPreambleBytes(setting);
         Serial.print(F("\r\nMinimum preamble bytes:"));
         Serial.print(setting);
         Serial.print(F(" means 0 = 2 bytes, 1 = 3b, 2 = 4b, 3 = 6b, 4 = 8b, 5 = 12b, 6 = 16b, 7 = 24 bytes\r\n"));

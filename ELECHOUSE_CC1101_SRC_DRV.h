@@ -211,7 +211,7 @@ void setDcFilterOff(bool v);
 void setManchester(bool v);
 void setSyncMode(byte v);
 void setFEC(bool v);
-void setPRE(byte v);
+void setNumPreambleBytes(byte v);
 void setPQT(byte v);
 void setCRC_AF(bool v);
 void setAppendStatus(bool v);
