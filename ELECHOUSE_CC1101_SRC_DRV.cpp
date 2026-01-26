@@ -911,6 +911,8 @@ void ELECHOUSE_CC1101::setModulation(byte m)
     if (m > 4)
         m = 4;
 
+#if OEM_CODE
+
     modulation = m;
     Split_MDMCFG2();
 
@@ -929,7 +931,45 @@ void ELECHOUSE_CC1101::setModulation(byte m)
 
     SpiWriteReg(CC1101_MDMCFG2, m2DCOFF + m2MODFM + m2MANCH + m2SYNCM);
     SpiWriteReg(CC1101_FREND0, frend0);
+#else
+	uint8_t modulation;
+
+	// common across all selections.
+	Serial.printf(FG_MAGENTA "%s: set PA lo current\n" _DONE, __FUNCTION__);
+	regRMW(CC1101_FREND0, 1, 5, 4);
+	
+	switch (m)
+	{
+		case 0:
+			modulation = 0;
+			break;	// 2-FSK
+
+		case 1: 
+			modulation = 1; 
+			break;	// GFSK
+
+		case 2: 
+			modulation = 3; 
+			Serial.printf(FG_MAGENTA "%s: PA power table index = %d\n" _DONE, __FUNCTION__, 1);
+			regRMW(CC1101_FREND0, 1, 2, 0);
+			break;	// ASK
+
+		case 3: 
+			modulation = 4;
+			break;	// 4-FSK
+
+		case 4: 
+			modulation = 7; 
+			break;	// MSK
+	}
+
+	Serial.printf(FG_MAGENTA "%s: modulation 0x%X\n" _DONE, __FUNCTION__, modulation);
+	regRMW(CC1101_MDMCFG2, modulation, 6, 4);
+
+
     setPA(pa);
+
+#endif
 }
 
 
@@ -1074,6 +1114,8 @@ float ELECHOUSE_CC1101::getMHZ(void)
 
 void ELECHOUSE_CC1101::setMHZ(float mhz)
 {
+
+#if OEM_CODE
     byte freq2 = 0;
     byte freq1 = 0;
     byte freq0 = 0;
@@ -1116,29 +1158,37 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
     SpiWriteReg(CC1101_FREQ0, freq0);
 
     //Calibrate();  // messes things up.
-    
-    #if OEM_CODE
-    	uint32_t  temp;
 
-	temp = (( mhz  * (float)(1 << 16))/ XTAL_Mhz);
-	Serial.printf("\n%s: %7.3f  data=0x%X\n", __FUNCTION__, mhz,  temp);
+#else    
+   	uint32_t  temp;
+
+	float adjFreq = mhz + tweakFreqHz/1e6;
+	
+	temp = (( adjFreq  * (float)(1 << 16))/ XTAL_Mhz);
+
+ 	Serial.printf(FG_MAGENTA "\n%s: %7.3f  data=0x%X\n"  _DONE, 
+ 			__FUNCTION__, mhz,  temp);
 	
 	SpiWriteReg(CC1101_FREQ2, (temp >>16) & 0xFF);
 	SpiWriteReg(CC1101_FREQ1, (temp >> 8) & 0xFF);
 	SpiWriteReg(CC1101_FREQ0,  temp       & 0xFF);
 	
-	gTargetFreq = mhz;
+	gMHz= mhz;
 
-	uint32_t test = SpiReadReg(CC1101_FREQ2) << 16 | SpiReadReg(CC1101_FREQ1)  << 8 | SpiReadReg(CC1101_FREQ0);
+#if 0
+	// verify.
+	uint32_t tweaked = SpiReadReg(CC1101_FREQ2) << 16 | SpiReadReg(CC1101_FREQ1)  << 8 | SpiReadReg(CC1101_FREQ0);
 
                
 	double retest;
-	retest = (XTAL_Mhz / (double)(1<<16)) * (double) test;
+	retest = (XTAL_Mhz / (double)(1<<16)) * (double) tweaked;
 	Serial.printf("%s VERIFY = %f mhz \n", __FUNCTION__, (float) retest);
 
-	double err = gTargetFreq - retest;
+	double err = adjFreq - retest;
 
-	Serial.printf("%s error = %6.3f\n", __FUNCTION__, err);
+	Serial.printf("%s error = %d hz\n\n", __FUNCTION__, (int) err);
+#endif
+
     #endif
 }
 
@@ -1292,7 +1342,7 @@ eMODEM_STATE ELECHOUSE_CC1101::getMode(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::setSyncWord(byte sh, byte sl)
 {
-	Serial.printf(FG_MAGENTA "\n%s: set sync word 0x%8X\n" _DONE, __FUNCTION__, sh << 8 + sl);
+	Serial.printf(FG_MAGENTA "\n%s: set sync word 0x%8X\n" _DONE, __FUNCTION__, (sh << 8) + sl);
     SpiWriteReg(CC1101_SYNC1, sh);
     SpiWriteReg(CC1101_SYNC0, sl);
 }
@@ -1930,7 +1980,7 @@ void ELECHOUSE_CC1101::setRxBW(float rxBw)
 	int16_t lockExp = -1;
 	int16_t lockMantissa = -1;
 
-	Serial.printf("%s: setting rx bw = %5.2f khz\n", __FUNCTION__, rxBw);
+	Serial.printf(FG_MAGENTA "\n%s: setting rx bw = %5.2f khz\n" _DONE, __FUNCTION__, rxBw);
 
 	rxBw *= 1000.;
 	float FIXED = (XTAL_Mhz * 1.e6) / (rxBw * 8.);
@@ -2091,7 +2141,7 @@ void ELECHOUSE_CC1101::setDeviation(float fdev)
 	int16_t lockExp = -1;
 	int16_t lockMantissa = -1;
 
-	Serial.printf("%s: setting deviation = %5.2f khz\n", __FUNCTION__, fdev);
+	Serial.printf(FG_MAGENTA "\n%s: setting deviation = %5.2f khz\n" _DONE, __FUNCTION__, fdev);
 
 	fdev *= 1000.;
 	float FIXED = fdev * (float)(1 << 17)/ (XTAL_Mhz * 1.e6 );
