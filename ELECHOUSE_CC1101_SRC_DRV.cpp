@@ -937,33 +937,42 @@ void ELECHOUSE_CC1101::setModulation(byte m)
 	// common across all selections.
 	Serial.printf(FG_MAGENTA "%s: set PA lo current\n" _DONE, __FUNCTION__);
 	regRMW(CC1101_FREND0, 1, 5, 4);
+
+	char type[20];
 	
 	switch (m)
 	{
 		case 0:
+			strcpy(type, "2-FSK");
 			modulation = 0;
 			break;	// 2-FSK
 
 		case 1: 
+			strcpy(type,"GFSK");
 			modulation = 1; 
 			break;	// GFSK
 
 		case 2: 
+			strcpy(type, "OOK");
 			modulation = 3; 
+
+			//Serial.printf(FG_FRED "\n%s: todo ook p/a levels?\n" _DONE, __FUNCTION__);
 			Serial.printf(FG_MAGENTA "%s: PA power table index = %d\n" _DONE, __FUNCTION__, 1);
 			regRMW(CC1101_FREND0, 1, 2, 0);
-			break;	// ASK
+			break;	// OOK
 
 		case 3: 
+			strcpy(type, "4-FSK");
 			modulation = 4;
 			break;	// 4-FSK
 
 		case 4: 
+			strcpy(type, "MSK");
 			modulation = 7; 
 			break;	// MSK
 	}
 
-	Serial.printf(FG_MAGENTA "%s: modulation 0x%X\n" _DONE, __FUNCTION__, modulation);
+	Serial.printf(FG_MAGENTA "%s: modulation %s 0x%X\n" _DONE, __FUNCTION__, type, modulation);
 	regRMW(CC1101_MDMCFG2, modulation, 6, 4);
 
 
@@ -1096,9 +1105,13 @@ void ELECHOUSE_CC1101::setPA(int p)
 * FUNCTION NAME:setOSCdrift
 * INPUT        : target miss on freq adj
 ****************************************************************/
-void ELECHOUSE_CC1101::setOSCdrift(float hz)
+float  ELECHOUSE_CC1101::setOSCdrift(float hz)
 {
+	float ret = tweakFreqHz;
 	tweakFreqHz = hz;
+	setMHZ(getMHZ());  	// reload frequency.
+	
+	return ret;
 }
 
 /****************************************************************
@@ -1166,8 +1179,8 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 	
 	temp = (( adjFreq  * (float)(1 << 16))/ XTAL_Mhz);
 
- 	Serial.printf(FG_MAGENTA "\n%s: %7.3f  data=0x%X\n"  _DONE, 
- 			__FUNCTION__, mhz,  temp);
+ 	Serial.printf(FG_CYAN "\n%s: tgt=%7.3f -> %f  (delta = %7.3f)\n"  _DONE, 
+ 			__FUNCTION__, mhz, adjFreq, tweakFreqHz);
 	
 	SpiWriteReg(CC1101_FREQ2, (temp >>16) & 0xFF);
 	SpiWriteReg(CC1101_FREQ1, (temp >> 8) & 0xFF);
@@ -2486,7 +2499,7 @@ void ELECHOUSE_CC1101::setSres(void)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setSidle(void)
+void ELECHOUSE_CC1101::EnterIdleMode(void)
 {
     SpiStrobe(CC1101_SIDLE);
     trxstate = MODEM_IDLE;

@@ -169,7 +169,7 @@ void setGDO0RisingCallback(void (*usrCallback)());
 void setGDO2FallingCallback(void (*usrCallback)());
 void setGDO2RisingCallback(void (*usrCallback)());
 
-void setOSCdrift(float hz);
+float setOSCdrift(float hz);
 void setLogicalChanNum(byte chnl);
 void setChannelSpacing(float f);
 void setRxBW(float f);
@@ -181,7 +181,7 @@ void EnterRxMode(float mhz);
 int getRssi(void);
 byte getLqi(void);
 void setSres(void);
-void setSidle(void);
+void EnterIdleMode(void);
 void goSleep(void);
 void SendData(byte *txBuffer, byte size);
 void SendData(char *txchar);

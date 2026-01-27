@@ -36,7 +36,7 @@
 #define EPROMSIZE 512               // Size of EEPROM in your Arduino chip. For ESP32 it is Flash simulated so very slow
 #define BUF_LENGTH 128              // Buffer for the incoming command.
 
-#define DEFAULT_TxFREQ 866.933 //903 //868.0 //903.00
+#define DEFAULT_TxFREQ 905 // 866.933
 
 #define DEFAULT_RxFREQ 867.3875
 
@@ -202,9 +202,14 @@ static void cc1101initialize(void)
     ELECHOUSE_cc1101.setChannelSpacing(199.95);       // The channel spacing is multiplied by the channel number CHAN and added to the base frequency in kHz. Value from 25.39 to 405.45. Default is 199.95 kHz.
     ELECHOUSE_cc1101.setRxBW(58.3);       	// Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
     
-    ELECHOUSE_cc1101.setDataRateKhz(4.8);         // Set the Data Rate in kBaud. Value from 0.02 to 1621.83. Default is 99.97 kBaud!
+    ELECHOUSE_cc1101.setDataRateKhz(4.8);   // Set the Data Rate in kBaud. 
+    										// Value from 0.02 to 1621.83. 
+    										//Default is 99.97 kBaud!
     
-    ELECHOUSE_cc1101.setPA(-6);             // Set TxPower. The following settings are possible depending on the frequency band.  (-30  -20  -15  -10  -6    0    5    7    10   11   12) Default is max!
+    ELECHOUSE_cc1101.setPA(-30);             // Set TxPower. 
+    										// The following settings are possible depending on the frequency band.
+    										// (-30  -20  -15  -10  -6    0    5    7    10   11   12) 
+    										// Default is max!
 
     ELECHOUSE_cc1101.setSyncMode(2);        // Combined sync-word qualifier mode. 
 											// 0 = No preamble/sync. 
@@ -270,7 +275,7 @@ static void cc1101initialize(void)
     										//		0 = Disable. 
     										//		1 = Enable.
     										
-    ELECHOUSE_cc1101.setNumPreambleBytes(0);             // Sets the minimum number of preamble bytes to be transmitted. 
+    ELECHOUSE_cc1101.setNumPreambleBytes(7);             // Sets the minimum number of preamble bytes to be transmitted. 
     										//		Values: 0 : 2, 
     										//				1 : 3, 
     										//				2 : 4,
@@ -295,14 +300,28 @@ static void cc1101initialize(void)
 
 
 // Execute a complete CC1101 command.
-static void exec(char *cmdline)
+static void exec(char *input)
 {
+    char *cmd = strsep(&input, " ");
+    Serial.printf("cmd = %s\n", cmd);
+	char * cmd_args;
+	
+    char tcmd_args[20];
+    
+    char *tst_args = strsep(&input, " ");
+    if (tst_args)
+    	strcpy(tcmd_args, tst_args);
+    else
+    	tcmd_args[0] = '\0';
 
-    char *command = strsep(&cmdline, " ");
+    cmd_args = &tcmd_args[0];
+    
+    Serial.printf("cmd_args = %s\n", cmd_args);
+    
     int setting, setting2, len;
     uint16_t brute, poweroftwo;
     byte j, k;
-    float startFreq;
+    float nextParam;
     float endFreq;
     // variables for frequency scanner
     float freq;
@@ -313,7 +332,7 @@ static void exec(char *cmdline)
 
     // identification of the command & actions
 
-    if (strcmp_P(command, PSTR("help")) == 0)
+    if (strcmp_P(cmd, PSTR("help")) == 0)
     {
         Serial.println(F(
            "setmodulation <mode> : Set modulation mode. 0 = 2-FSK, 1 = GFSK, 2 = ASK/OOK, 3 = 4-FSK, 4 = MSK.\r\n"
@@ -358,6 +377,7 @@ static void exec(char *cmdline)
         Serial.println(F(
            "rx : Sniffer. Enable or disable printing of received RF packets on serial terminal.\r\n"
            "tx <hex-vals> : Send packet of max 60 bytes <hex values> over RF\r\n"
+           "cal : send 8 ook beacons\r\n"
            "jam : Enable or disable continous jamming on selected band.\r\n"
    		    "\r\n"
            "brute <microseconds> <number-of-bits> : \n\tBrute force garage gate with <nb-of-bits> keyword \n\twhere symbol time is <usec>.\r\n"
@@ -388,9 +408,9 @@ static void exec(char *cmdline)
 
         // Handling SETMODULATION command
     }
-    else if (strcmp_P(command, PSTR("setmodulation")) == 0)
+    else if (strcmp_P(cmd, PSTR("setmodulation")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setModulation(setting);
         Serial.print(F("\r\nModulation: "));
 
@@ -410,29 +430,29 @@ static void exec(char *cmdline)
 
         // Handling SETMHZ command
     }
-    else if (strcmp_P(command, PSTR("setmhz")) == 0)
+    else if (strcmp_P(cmd, PSTR("setmhz")) == 0)
     {
-        startFreq = atof(cmdline);
-        ELECHOUSE_cc1101.setMHZ(startFreq);
+        nextParam = atof(cmd_args);
+        ELECHOUSE_cc1101.setMHZ(nextParam);
         Serial.print(F("\r\nFrequency: "));
-        Serial.print(startFreq);
+        Serial.print(nextParam);
         Serial.print(F(" gMHz\r\n"));
 
         // Handling SETDEVIATION command
     }
-    else if (strcmp_P(command, PSTR("setdeviation")) == 0)
+    else if (strcmp_P(cmd, PSTR("setdeviation")) == 0)
     {
-        startFreq = atof(cmdline);
-        ELECHOUSE_cc1101.setDeviation(startFreq);
+        nextParam = atof(cmd_args);
+        ELECHOUSE_cc1101.setDeviation(nextParam);
         Serial.print(F("\r\nDeviation: "));
-        Serial.print(startFreq);
+        Serial.print(nextParam);
         Serial.print(F(" KHz\r\n"));
 
         // Handling SETCHANNEL command
     }
-    else if (strcmp_P(command, PSTR("setchannel")) == 0)
+    else if (strcmp_P(cmd, PSTR("setchannel")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setLogicalChanNum(setting);
         Serial.print(F("\r\nChannel:"));
         Serial.print(setting);
@@ -440,39 +460,39 @@ static void exec(char *cmdline)
 
         // Handling SETCHSP command
     }
-    else if (strcmp_P(command, PSTR("setchsp")) == 0)
+    else if (strcmp_P(cmd, PSTR("setchsp")) == 0)
     {
-        startFreq = atof(cmdline);
-        ELECHOUSE_cc1101.setChannelSpacing(startFreq);
+        nextParam = atof(cmd_args);
+        ELECHOUSE_cc1101.setChannelSpacing(nextParam);
         Serial.print(F("\r\nChann spacing: "));
-        Serial.print(startFreq);
+        Serial.print(nextParam);
         Serial.print(F(" kHz\r\n"));
 
         // Handling SETRXBW command
     }
-    else if (strcmp_P(command, PSTR("setrxbw")) == 0)
+    else if (strcmp_P(cmd, PSTR("setrxbw")) == 0)
     {
-        startFreq = atof(cmdline);
-        ELECHOUSE_cc1101.setRxBW(startFreq);
+        nextParam = atof(cmd_args);
+        ELECHOUSE_cc1101.setRxBW(nextParam);
         Serial.print(F("\r\nRX bandwidth: "));
-        Serial.print(startFreq);
+        Serial.print(nextParam);
         Serial.print(F(" kHz \r\n"));
 
         // Handling SETDRATE command
     }
-    else if (strcmp_P(command, PSTR("setdrate")) == 0)
+    else if (strcmp_P(cmd, PSTR("setdrate")) == 0)
     {
-        startFreq = atof(cmdline);
-        ELECHOUSE_cc1101.setDataRateKhz(startFreq);
+        nextParam = atof(cmd_args);
+        ELECHOUSE_cc1101.setDataRateKhz(nextParam);
         Serial.print(F("\r\nDatarate: "));
-        Serial.print(startFreq);
+        Serial.print(nextParam);
         Serial.print(F(" kbaud\r\n"));
 
         // Handling SETPA command
     }
-    else if (strcmp_P(command, PSTR("setpa")) == 0)
+    else if (strcmp_P(cmd, PSTR("setpa")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setPA(setting);
         Serial.print(F("\r\nTX PWR: "));
         Serial.print(setting);
@@ -480,9 +500,9 @@ static void exec(char *cmdline)
 
         // Handling SETSYNCMODE command
     }
-    else if (strcmp_P(command, PSTR("setsyncmode")) == 0)
+    else if (strcmp_P(cmd, PSTR("setsyncmode")) == 0)
     {
-        int setting = atoi(cmdline);
+        int setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setSyncMode(setting);
         Serial.print(F("\r\nSynchronization: "));
 
@@ -508,10 +528,10 @@ static void exec(char *cmdline)
 
         // Handling SETSYNCWORD command
     }
-    else if (strcmp_P(command, PSTR("setsyncword")) == 0)
+    else if (strcmp_P(cmd, PSTR("setsyncword")) == 0)
     {
-        setting = atoi(strsep(&cmdline, " "));
-        setting2 = atoi(cmdline);
+        setting = atoi(strsep(&cmd_args, " "));
+        setting2 = atoi(cmd_args);
         ELECHOUSE_cc1101.setSyncWord(setting2, setting);
         Serial.print(F("\r\nSynchronization:\r\n"));
         Serial.print(F("high = "));
@@ -523,9 +543,9 @@ static void exec(char *cmdline)
 
         // Handling SETADRCHK command
     }
-    else if (strcmp_P(command, PSTR("setadrchk")) == 0)
+    else if (strcmp_P(cmd, PSTR("setadrchk")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setAdrChk(setting);
         Serial.print(F("\r\nAddress checking:"));
 
@@ -543,9 +563,9 @@ static void exec(char *cmdline)
 
         // Handling SETADDR command
     }
-    else if (strcmp_P(command, PSTR("setaddr")) == 0)
+    else if (strcmp_P(cmd, PSTR("setaddr")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setAddr(setting);
         Serial.print(F("\r\nAddress: "));
         Serial.print(setting);
@@ -553,9 +573,9 @@ static void exec(char *cmdline)
 
         // Handling SETWHITEDATA command
     }
-    else if (strcmp_P(command, PSTR("setwhitedata")) == 0)
+    else if (strcmp_P(cmd, PSTR("setwhitedata")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setWhiteData(setting);
         Serial.print(F("\r\nWhitening "));
 
@@ -568,9 +588,9 @@ static void exec(char *cmdline)
 
         // Handling SETPKTFORMAT command
     }
-    else if (strcmp_P(command, PSTR("setpktformat")) == 0)
+    else if (strcmp_P(cmd, PSTR("setpktformat")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setPktFormat(setting);
         Serial.print(F("\r\nPacket format: "));
 
@@ -588,9 +608,9 @@ static void exec(char *cmdline)
 
         // Handling SETLENGTHCONFIG command
     }
-    else if (strcmp_P(command, PSTR("setlengthconfig")) == 0)
+    else if (strcmp_P(cmd, PSTR("setlengthconfig")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setLengthConfig(setting);
         Serial.print(F("\r\nPkt length mode: "));
 
@@ -608,9 +628,9 @@ static void exec(char *cmdline)
 
         // Handling SETPACKETLENGTH command
     }
-    else if (strcmp_P(command, PSTR("setpacketlength")) == 0)
+    else if (strcmp_P(cmd, PSTR("setpacketlength")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setPacketLength(setting);
         Serial.print(F("\r\nPkt length: "));
         Serial.print(setting);
@@ -618,9 +638,9 @@ static void exec(char *cmdline)
 
         // Handling SETCRC command
     }
-    else if (strcmp_P(command, PSTR("setcrc")) == 0)
+    else if (strcmp_P(cmd, PSTR("setcrc")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setCrc(setting);
         Serial.print(F("\r\nCRC checking: "));
 
@@ -634,9 +654,9 @@ static void exec(char *cmdline)
 
         // Handling SETCRCAF command
     }
-    else if (strcmp_P(command, PSTR("setcrcaf")) == 0)
+    else if (strcmp_P(cmd, PSTR("setcrcaf")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setCRC_AF(setting);
         Serial.print(F("\r\nCRC Autoflush: "));
 
@@ -650,9 +670,9 @@ static void exec(char *cmdline)
 
         // Handling SETDCFILTEROFF command
     }
-    else if (strcmp_P(command, PSTR("setdcfilteroff")) == 0)
+    else if (strcmp_P(cmd, PSTR("setdcfilteroff")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setDcFilterOff(setting);
         Serial.print(F("\r\nDC filter: "));
 
@@ -666,9 +686,9 @@ static void exec(char *cmdline)
 
         // Handling SETMANCHESTER command
     }
-    else if (strcmp_P(command, PSTR("setmanchester")) == 0)
+    else if (strcmp_P(cmd, PSTR("setmanchester")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setManchester(setting);
         Serial.print(F("\r\nManchester coding: "));
 
@@ -682,9 +702,9 @@ static void exec(char *cmdline)
 
         // Handling SETFEC command
     }
-    else if (strcmp_P(command, PSTR("setfec")) == 0)
+    else if (strcmp_P(cmd, PSTR("setfec")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setFEC(setting);
         Serial.print(F("\r\nForward Error Correction: "));
 
@@ -698,9 +718,9 @@ static void exec(char *cmdline)
 
         // Handling SETPRE command
     }
-    else if (strcmp_P(command, PSTR("setpre")) == 0)
+    else if (strcmp_P(cmd, PSTR("setpre")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setNumPreambleBytes(setting);
         Serial.print(F("\r\nMinimum preamble bytes:"));
         Serial.print(setting);
@@ -710,9 +730,9 @@ static void exec(char *cmdline)
 
         // Handling SETPQT command
     }
-    else if (strcmp_P(command, PSTR("setpqt")) == 0)
+    else if (strcmp_P(cmd, PSTR("setpqt")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setPQT(setting);
         Serial.print(F("\r\nPQT: "));
         Serial.print(setting);
@@ -720,9 +740,9 @@ static void exec(char *cmdline)
 
         // Handling SETAPPENDSTATUS command
     }
-    else if (strcmp_P(command, PSTR("setappendstatus")) == 0)
+    else if (strcmp_P(cmd, PSTR("setappendstatus")) == 0)
     {
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
         ELECHOUSE_cc1101.setAppendStatus(setting);
         Serial.print(F("\r\nStatus bytes appending: "));
 
@@ -736,7 +756,7 @@ static void exec(char *cmdline)
 
         // Handling GETRSSI command
     }
-    else if (strcmp_P(command, PSTR("getrssi")) == 0)
+    else if (strcmp_P(cmd, PSTR("getrssi")) == 0)
     {
         //Rssi Level in dBm
         Serial.print(F("Rssi: "));
@@ -749,20 +769,20 @@ static void exec(char *cmdline)
 
         // Handling SCAN command - frequency scanner by Little S@tan !
     }
-    else if (strcmp_P(command, PSTR("scan")) == 0)
+    else if (strcmp_P(cmd, PSTR("scan")) == 0)
     {
     	// round down to nearest step size
-        startFreq = atof(strsep(&cmdline, " "));
-        uint32_t start = ((startFreq * 1000000.)/ DEFAULT_STEP) * DEFAULT_STEP;
-        startFreq = start/1000000;
+        nextParam = atof(strsep(&cmd_args, " "));
+        uint32_t start = ((nextParam * 1000000.)/ DEFAULT_STEP) * DEFAULT_STEP;
+        nextParam = start/1000000;
 
         // round up to nearest step size
-        endFreq = atof(cmdline);
+        endFreq = atof(cmd_args);
 		uint32_t end = (((endFreq * 1000000.) + DEFAULT_STEP/2) /DEFAULT_STEP ) * DEFAULT_STEP;
 		endFreq = end/1000000;
 		
         Serial.print(F("\r\nScanning frequency range from : "));
-        Serial.print(startFreq);
+        Serial.print(nextParam);
         Serial.print(F(" gMHz to "));
         Serial.print(endFreq);
         Serial.print(F(" MHz, press any key for stop or wait...\r\n"));
@@ -775,7 +795,7 @@ static void exec(char *cmdline)
         ELECHOUSE_cc1101.EnterRxMode();
 
         // Do scanning until some key pressed
-        freq = startFreq;  // start frequency for scanning
+        freq = nextParam;  // start frequency for scanning
         mark_rssi = -100;
 
         while (!Serial.available())
@@ -798,7 +818,7 @@ static void exec(char *cmdline)
 
             if (freq > endFreq)
             {
-                freq = startFreq;
+                freq = nextParam;
 
                 if (mark_rssi > -75)
                 {
@@ -828,7 +848,7 @@ static void exec(char *cmdline)
 
         // handling SAVE command
     }
-    else if (strcmp_P(command, PSTR("save")) == 0)
+    else if (strcmp_P(cmd, PSTR("save")) == 0)
     {
         //start saving recording buffer content into EEPROM non-volatile memory
         Serial.print(F("\r\nSaving recording buffer content into the non-volatile memory...\r\n"));
@@ -844,7 +864,7 @@ static void exec(char *cmdline)
 
         // handling LOAD command
     }
-    else if (strcmp_P(command, PSTR("load")) == 0)
+    else if (strcmp_P(cmd, PSTR("load")) == 0)
     {
         // first flushing bigrecordingbuffer with zeros and rewinding all the pointers
         for (setting = 0; setting < RECORDINGBUFFERSIZE; setting++)
@@ -865,7 +885,7 @@ static void exec(char *cmdline)
 
         // Handling RX command
     }
-    else if (strcmp_P(command, PSTR("rx")) == 0)
+    else if (strcmp_P(cmd, PSTR("rx")) == 0)
     {
         Serial.print(F("\r\nReceiving and printing RF packet changed to "));
 
@@ -889,7 +909,7 @@ static void exec(char *cmdline)
 
         // Handling CHAT command
     }
-    else if (strcmp_P(command, PSTR("chat")) == 0)
+    else if (strcmp_P(cmd, PSTR("chat")) == 0)
     {
         Serial.print(F("\r\nEntering chat mode:\r\n"));
 
@@ -906,7 +926,7 @@ static void exec(char *cmdline)
 
         // Handling JAM command
     }
-    else if (strcmp_P(command, PSTR("jam")) == 0)
+    else if (strcmp_P(cmd, PSTR("jam")) == 0)
     {
         Serial.print(F("\r\nJamming changed to "));
 
@@ -927,13 +947,13 @@ static void exec(char *cmdline)
 
         // handling BRUTE command
     }
-    else if (strcmp_P(command, PSTR("brute")) == 0)
+    else if (strcmp_P(cmd, PSTR("brute")) == 0)
     {
 
         // take interval period for sampling
-        setting = atoi(strsep(&cmdline, " "));
+        setting = atoi(strsep(&cmd_args, " "));
         // take number of bits for brute forcing
-        setting2 = atoi(cmdline);
+        setting2 = atoi(cmd_args);
         // calculate power of 2 upon setting
         poweroftwo = 1 << setting2;
 
@@ -982,39 +1002,36 @@ static void exec(char *cmdline)
  
         // Handling TX command
     }
-    else if (strcmp_P(command, PSTR("tx")) == 0)
+    else if (strcmp_P(cmd, PSTR("tx")) == 0)
     {
     	const char testString[] = "0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F ";
-		LINE;
-		LINE;
-		LINE;
+
         // convert hex array to set of bytes
-        int iCnt;
+        int iCnt = sizeof(hexBuffer);
 
-#if 0   
-        if (cmdline && (strlen(cmdline) <= 120) && (strlen(cmdline) > 0))
-        {
-        	LINE;
-            iCnt = hextoascii(hexBuffer, (byte *)cmdline, strlen(cmdline));
-        }
-        else
+#if 0
+		iCnt =hextoascii(hexBuffer, (byte *) testString, strlen(testString));
+#else
+		for (int i= 0; i < iCnt; i++) hexBuffer[i] = random(255);
 #endif
-        {
-        	LINE;
-        	// none provided use canned string
-            iCnt =hextoascii(hexBuffer, (byte *) testString, strlen(testString));
-        }
 
-        
-        memcpy(ccsendingbuffer, hexBuffer,  iCnt);  /// ?? strlen(cmdline) / 2);
+     	// none provided use canned string
+        iCnt =hextoascii(hexBuffer, (byte *) testString, strlen(testString));
+         
+        memcpy(ccsendingbuffer, hexBuffer,  iCnt);  /// ?? strlen(param2) / 2);
         ccsendingbuffer[iCnt] = 0x00;
+
+		ELECHOUSE_cc1101.EnterIdleMode();
+
+		ELECHOUSE_cc1101.setModulation(3); //4fsk
+		ELECHOUSE_cc1101.setDataRateKhz(.3);
 
 		Serial.println("wait for 7 seconds");
 		delay(7000);
 		
-        for (int cnt= 0; cnt < 30; cnt++)
+        for (int cnt= 0; cnt < 3; cnt++)
         {
-	        Serial.printf("\r\nTransmitting RF packet %d of 30.\r\n", cnt);
+	        Serial.printf("\r\nTransmitting RF packet %d of 3.\r\n", cnt);
         
         	// send these data to radio over CC1101
         	ELECHOUSE_cc1101.SendData(ccsendingbuffer, iCnt);
@@ -1028,12 +1045,60 @@ static void exec(char *cmdline)
 			// for DEBUG only
 		}
     
+		ELECHOUSE_cc1101.EnterIdleMode();
+		ELECHOUSE_cc1101.setDataRateKhz(4.8);
+	
     }
+    else if (strcmp_P(cmd, PSTR("cal")) == 0)
+    {
+    	const char testString[] = "0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F ";
+
+        // convert hex array to set of bytes
+        int iCnt = sizeof(hexBuffer);
+
+#if 0
+        iCnt =hextoascii(hexBuffer, (byte *) testString, strlen(testString));
+#else
+		for (int i= 0; i < iCnt; i++) hexBuffer[i] = random(255);
+#endif
+        
+        memcpy(ccsendingbuffer, hexBuffer,  iCnt);  /// ?? strlen(param2) / 2);
+        ccsendingbuffer[iCnt] = 0x00;
+
+		Serial.println("wait for 7 seconds");
+		delay(7000);
+
+		ELECHOUSE_cc1101.EnterIdleMode();
+		ELECHOUSE_cc1101.setModulation(2); //ook
+		ELECHOUSE_cc1101.setDataRateKhz(.3);
+		
+        for (int cnt= 0; cnt < 3; cnt++)
+        {
+	        Serial.printf("\r\nTransmitting RF packet %d of 30.\r\n", cnt);
+        
+        	// send these data to radio over CC1101
+        	ELECHOUSE_cc1101.SendData(ccsendingbuffer, iCnt);
+
+        	delay(500);
+	        asciitohex(ccsendingbuffer, hexBuffer, iCnt);
+	        
+	        Serial.print(F("Sent frame: "));
+	        Serial.print((char *)hexBuffer);
+	        Serial.print(F("\r\n"));
+			// for DEBUG only
+		}
+		
+		ELECHOUSE_cc1101.EnterIdleMode();
+		ELECHOUSE_cc1101.setModulation(3); //4fsk
+		ELECHOUSE_cc1101.setDataRateKhz(4.8);
+    
+    }
+
 	// handling RECRAW command
-    else if (strcmp_P(command, PSTR("recraw")) == 0)
+    else if (strcmp_P(cmd, PSTR("recraw")) == 0)
     {
         // take interval period for samplink
-        //setting = atoi(cmdline);
+        //setting = atoi(param2);
         
 		setting =  (1.e6/9600);
 		
@@ -1098,10 +1163,10 @@ static void exec(char *cmdline)
 
         // handling RXRAW command - sniffer
     }
-    else if (strcmp_P(command, PSTR("rxraw")) == 0)
+    else if (strcmp_P(cmd, PSTR("rxraw")) == 0)
     {
         // take interval period for samplink
-        //setting = atoi(cmdline);
+        //setting = atoi(param2);
 		setting =  (1.e6/9600);
 
         if (setting > 0)
@@ -1171,10 +1236,10 @@ static void exec(char *cmdline)
 
         // handling PLAYRAW command
     }
-    else if (strcmp_P(command, PSTR("playraw")) == 0)
+    else if (strcmp_P(cmd, PSTR("playraw")) == 0)
     {
         // take interval period for sampling
-        setting = atoi(cmdline);
+        setting = atoi(cmd_args);
 
         if (setting > 0)
         {
@@ -1216,7 +1281,7 @@ static void exec(char *cmdline)
 
         // handling SHOWRAW command
     }
-    else if (strcmp_P(command, PSTR("showraw")) == 0)
+    else if (strcmp_P(cmd, PSTR("showraw")) == 0)
     {
         // show the content of recorded RAW signal as hex numbers
         Serial.print(F("\r\nRecorded RAW data:\r\n"));
@@ -1232,7 +1297,7 @@ static void exec(char *cmdline)
 
         // handling SHOWBIT command
     }
-    else if (strcmp_P(command, PSTR("showbit")) == 0)
+    else if (strcmp_P(cmd, PSTR("showbit")) == 0)
     {
         // show the content of recorded RAW signal as hex numbers
         Serial.print(F("\r\nRecorded RAW data as bit stream:\r\n"));
@@ -1328,16 +1393,16 @@ static void exec(char *cmdline)
 
         // Handling ADDRAW command
     }
-    else if (strcmp_P(command, PSTR("addraw")) == 0)
+    else if (strcmp_P(cmd, PSTR("addraw")) == 0)
     {
         // getting hex numbers - the content of the  frame
-        len = strlen(cmdline);
+        len = strlen(cmd_args);
 
         // convert hex array to set of bytes
         if ((len <= 120) && (len > 0))
         {
             // convert the hex content to array of bytes
-            hextoascii(hexBuffer, (byte *)cmdline, len);
+            hextoascii(hexBuffer, (byte *)cmd_args, len);
             len = len / 2;
 
             // check if the frame fits into the buffer and store it
@@ -1366,7 +1431,7 @@ static void exec(char *cmdline)
 
         // Handling REC command
     }
-    else if (strcmp_P(command, PSTR("rec")) == 0)
+    else if (strcmp_P(cmd, PSTR("rec")) == 0)
     {
         Serial.print(F("\r\nRecording mode set to "));
 
@@ -1400,9 +1465,9 @@ static void exec(char *cmdline)
 
         // Handling PLAY command
     }
-    else if (strcmp_P(command, PSTR("play")) == 0)
+    else if (strcmp_P(cmd, PSTR("play")) == 0)
     {
-        setting = atoi(strsep(&cmdline, " "));
+        setting = atoi(strsep(&cmd_args, " "));
 
         // if number of played frames is 0 it means play all frames
         if (setting <= framesinbigrecordingbuffer)
@@ -1457,16 +1522,16 @@ static void exec(char *cmdline)
 
         // Handling ADD command
     }
-    else if (strcmp_P(command, PSTR("add")) == 0)
+    else if (strcmp_P(cmd, PSTR("add")) == 0)
     {
         // getting hex numbers - the content of the  frame
-        len = strlen(cmdline);
+        len = strlen(cmd_args);
 
         // convert hex array to set of bytes
         if ((len <= 120) && (len > 0))
         {
             // convert the hex content to array of bytes
-            hextoascii(hexBuffer, (byte *)cmdline, len);
+            hextoascii(hexBuffer, (byte *)cmd_args, len);
             len = len / 2;
 
             // check if the frame fits into the buffer and store it
@@ -1498,7 +1563,7 @@ static void exec(char *cmdline)
 
         // Handling SHOW command
     }
-    else if (strcmp_P(command, PSTR("show")) == 0)
+    else if (strcmp_P(cmd, PSTR("show")) == 0)
     {
         if (framesinbigrecordingbuffer > 0)
         {
@@ -1553,7 +1618,7 @@ static void exec(char *cmdline)
 
         // Handling FLUSH command
     }
-    else if (strcmp_P(command, PSTR("flush")) == 0)
+    else if (strcmp_P(cmd, PSTR("flush")) == 0)
     {
         // flushing bigrecordingbuffer with zeros and rewinding all the pointers
         for (setting = 0; setting < RECORDINGBUFFERSIZE; setting++)
@@ -1567,14 +1632,20 @@ static void exec(char *cmdline)
 
         // Handling ECHO command
     }
-    else if (strcmp_P(command, PSTR("echo")) == 0)
+    else if (strcmp_P(cmd, PSTR("offset")) == 0)
     {
-        do_echo = atoi(cmdline);
+    	float now = atof(cmd_args);
+        float orig = ELECHOUSE_cc1101.setOSCdrift(now);
+		Serial.printf(">>> %s : old = %f new = %f\n", cmd, orig, now);
+    }
+    else if (strcmp_P(cmd, PSTR("echo")) == 0)
+    {
+        do_echo = atoi(cmd_args);
 
         // Handling X command
         // command 'x' stops jamming, receiveing, recording...
     }
-    else if (strcmp_P(command, PSTR("x")) == 0)
+    else if (strcmp_P(cmd, PSTR("x")) == 0)
     {
         receivingmode = 0;
         jammingmode = 0;
@@ -1584,7 +1655,7 @@ static void exec(char *cmdline)
         // Handling INIT command
         // command 'init' initializes board with default settings
     }
-    else if (strcmp_P(command, PSTR("init")) == 0)
+    else if (strcmp_P(cmd, PSTR("init")) == 0)
     {
         // init cc1101
         cc1101initialize();
@@ -1594,8 +1665,8 @@ static void exec(char *cmdline)
     }
     else
     {
-        Serial.print(F("Error: Unknown command: "));
-        Serial.println(command);
+        Serial.print(F("Error: Unknown cmd: "));
+        Serial.println(cmd);
         //  debug only
         // asciitohex(command, (byte *)hexBuffer,  strlen(command));
         // Serial.print(F("\r\n"));
