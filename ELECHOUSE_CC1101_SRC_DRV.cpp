@@ -70,7 +70,7 @@ bool spi = 0;
 eGDIO_MODES ccmode = LEGACY_0;
 eMODEM_STATE trxstate = MODEM_IDLE;
 float gMHz = 905.0;
-float tweakFreqHz = -( 20743 + 20400 + 4502.+ 1800 - 800); // running high. knock it down.
+float tweakFreqHz =  0; // -( 20743 + 20400 + 4502.+ 1800 - 800); // running high. knock it down.
 byte m4RxBw = 0;
 byte m4DaRa;
 byte m2DCOFF;
@@ -89,10 +89,12 @@ byte pc0PktForm;
 byte pc0CRC_EN;
 byte pc0LenConf;
 
-byte clb1[2] = { 24, 28 };
-byte clb2[2] = { 31, 38 };
-byte clb3[2] = { 65, 76 };
-byte clb4[2] = { 77, 79 };
+
+// NOTE: this is now expressed in hertz, not Smartnet vals
+int32_t hwTweakHz_300_348Mhz[2] = {  2000,  3000 };	// made up
+int32_t hwTweakHz_378_464Mhz[2] = {  3000,  4000 };	// made up
+int32_t hwTweakHz_779_899Mhz[2] = {  4000,  5000 };	// made up
+int32_t hwTweakHz_900_928Mhz[2] = { 47666, 47666 };   // CAL'd
 
 
 int16_t mirror[64];
@@ -1217,6 +1219,8 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 #else    
    	uint32_t  temp;
 
+    Calibrate();
+
 	float adjFreq = mhz + tweakFreqHz/1e6;
 	
 	temp = (( adjFreq  * (float)(1 << 16))/ XTAL_Mhz);
@@ -1257,9 +1261,19 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 void ELECHOUSE_CC1101::Calibrate(void)
 {
 
+	//CC1101_FSCTRL0 = add offset to any setMHZ command BY HARDWARE!
+	//CC1101_TEST0 = no clue. Too obtuse.
+
+	const int32_t hzPerStep = (XTAL_Mhz * 1e6)/(float) (1<<14);
+	
+	
     if (gMHz >= 300 && gMHz <= 348)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(gMHz, 300, 348, clb1[0], clb1[1]));
+    	
+        int32_t offset =(CC1101_FSCTRL0, map(gMHz, 300, 348, hwTweakHz_300_348Mhz[0], hwTweakHz_300_348Mhz[1]));
+		Serial.printf(FG_GREEN "%s offset added is %d hz\n" _DONE, __FUNCTION__, offset); 
+        
+        SpiWriteReg(CC1101_FSCTRL0,  (uint8_t) offset / hzPerStep);
 
         if (gMHz < 322.88)
         {
@@ -1279,7 +1293,10 @@ void ELECHOUSE_CC1101::Calibrate(void)
     }
     else if (gMHz >= 378 && gMHz <= 464)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(gMHz, 378, 464, clb2[0], clb2[1]));
+        int32_t offset =(CC1101_FSCTRL0, map(gMHz, 378, 464, hwTweakHz_378_464Mhz[0], hwTweakHz_378_464Mhz[1]));
+		Serial.printf(FG_GREEN "%s offset added is %d hz\n" _DONE, __FUNCTION__, offset); 
+        
+        SpiWriteReg(CC1101_FSCTRL0,  (uint8_t) offset / hzPerStep);
 
         if (gMHz < 430.5)
         {
@@ -1299,8 +1316,12 @@ void ELECHOUSE_CC1101::Calibrate(void)
     }
     else if (gMHz >= 779 && gMHz <= 899.99)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(gMHz, 779, 899, clb3[0], clb3[1]));
-
+    
+		int32_t offset =(CC1101_FSCTRL0, map(gMHz, 779, 899, hwTweakHz_779_899Mhz[0], hwTweakHz_779_899Mhz[1]));
+		Serial.printf(FG_GREEN "%s offset added is %d hz\n" _DONE, __FUNCTION__, offset); 
+		
+		SpiWriteReg(CC1101_FSCTRL0,  (uint8_t) offset / hzPerStep);
+	
         if (gMHz < 861)
         {
             SpiWriteReg(CC1101_TEST0, 0x0B);
@@ -1319,7 +1340,15 @@ void ELECHOUSE_CC1101::Calibrate(void)
     }
     else if (gMHz >= 900 && gMHz <= 928)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(gMHz, 900, 928, clb4[0], clb4[1]));
+
+		// Serial.printf("kkkkkkkkkkkkkkkkkkkkkkkk %d\n", hzPerStep);
+		
+		int32_t offset =(CC1101_FSCTRL0, map(gMHz, 900, 928, hwTweakHz_900_928Mhz[0], hwTweakHz_900_928Mhz[1]));
+		Serial.printf(FG_GREEN "%s offset added is %d hz\n" _DONE, __FUNCTION__, offset); 
+
+		Serial.printf("note: %d %d\n", offset / hzPerStep,  (uint8_t)( offset / hzPerStep));
+		SpiWriteReg(CC1101_FSCTRL0, (uint8_t)(offset / hzPerStep));
+		
         SpiWriteReg(CC1101_TEST0, 0x09);
         int s = ELECHOUSE_cc1101.SpiReadStatus(CC1101_FSCAL2);
 
@@ -1338,27 +1367,27 @@ void ELECHOUSE_CC1101::Calibrate(void)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setClb(byte b, byte s, byte e)
+void ELECHOUSE_CC1101::setCalibrationOffset(byte b, int32_t low, int32_t  high)
 {
     if (b == 1)
     {
-        clb1[0] = s;
-        clb1[1] = e;
+        hwTweakHz_300_348Mhz[0] = low;
+        hwTweakHz_300_348Mhz[1] = high;
     }
     else if (b == 2)
     {
-        clb2[0] = s;
-        clb2[1] = e;
+        hwTweakHz_378_464Mhz[0] = low;
+        hwTweakHz_378_464Mhz[1] = high;
     }
     else if (b == 3)
     {
-        clb3[0] = s;
-        clb3[1] = e;
+        hwTweakHz_779_899Mhz[0] = low;
+        hwTweakHz_779_899Mhz[1] = high;
     }
     else if (b == 4)
     {
-        clb4[0] = s;
-        clb4[1] = e;
+        hwTweakHz_900_928Mhz[0] = low;
+        hwTweakHz_900_928Mhz[1] = high;
     }
 }
 
@@ -2454,6 +2483,7 @@ void ELECHOUSE_CC1101::EnterTxMode(void)
     
     Serial.printf(FG_FYELLOW "%s: TX MODE !!!! \n", __FUNCTION__);
     trxstate = MODEM_TX;
+
     
     getState();
 }

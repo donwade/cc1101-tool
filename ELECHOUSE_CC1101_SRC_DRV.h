@@ -199,7 +199,7 @@ void _SpiWriteReg(const char*name, byte addr, byte value, bool bQuiet=false);
 void SpiWriteBurstReg(byte addr, byte *buffer, byte num);
 byte SpiReadReg(byte addr);
 void SpiReadBurstReg(byte addr, byte *buffer, byte num);
-void setClb(byte b, byte s, byte e);
+void setCalibrationOffset(byte b, int32_t s, int32_t e);
 bool getCC1101(void);
 eMODEM_STATE getMode(void);
 void setSyncWord(byte sh, byte sl);

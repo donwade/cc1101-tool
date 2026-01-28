@@ -1694,9 +1694,9 @@ void setup()
     Serial.begin(115200);
     delay(3000);
 
-	_setup_M5();
-	_lclear();
-	_cprintf(_GREEN, 0,	"%s", built_on);									   
+//	_setup_M5();
+//	_lclear();
+//	_cprintf(_GREEN, 0,	"%s", built_on);									   
 	
 
     Serial.println(F("CC1101 terminal tool connected, use 'help' for list of commands..."));
@@ -1718,7 +1718,7 @@ void setup()
         Serial.printf("\ncc1101 connection error! check the wiring.\n\n");
 
 
-	_cprintf(_GREEN, 2,	"freq = %f", ELECHOUSE_cc1101.getMHZ());
+//	_cprintf(_GREEN, 2,	"freq = %f", ELECHOUSE_cc1101.getMHZ());
 
     // setup variables
     bigrecordingbufferpos = 0;
