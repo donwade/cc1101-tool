@@ -1174,6 +1174,7 @@ static void exec(char *input)
             // setup async mode on CC1101 with GDO0 pin processing
             ELECHOUSE_cc1101.setCCMode(LEGACY_0);
             ELECHOUSE_cc1101.setPktFormat(3);
+            ELECHOUSE_cc1101.setModulation(3); //fsk-4
             ELECHOUSE_cc1101.EnterRxMode();
             
             //start recording to the buffer with bitbanging of GDO0 pin state
