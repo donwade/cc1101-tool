@@ -180,6 +180,8 @@ void EnterRxMode(void);
 void EnterRxMode(float mhz);
 int getRssi(void);
 byte getLqi(void);
+byte getState(void);
+
 void setSres(void);
 void EnterIdleMode(void);
 void goSleep(void);

@@ -1074,7 +1074,7 @@ static void exec(char *input)
 		
         for (int cnt= 0; cnt < 3; cnt++)
         {
-	        Serial.printf("\r\nTransmitting RF packet %d of 30.\r\n", cnt);
+	        Serial.printf("\r\nTransmitting RF packet %d of 3.\r\n", cnt);
         
         	// send these data to radio over CC1101
         	ELECHOUSE_cc1101.SendData(ccsendingbuffer, iCnt);
@@ -1637,7 +1637,7 @@ static void exec(char *input)
     	float now = atof(cmd_args);
         float orig = ELECHOUSE_cc1101.setOSCdrift(now);
 		Serial.printf(">>> %s : old = %f new = %f\n", cmd, orig, now);
-    }
+   }
     else if (strcmp_P(cmd, PSTR("echo")) == 0)
     {
         do_echo = atoi(cmd_args);
@@ -1813,7 +1813,10 @@ void loop()
                 buffer[length] = '\0';
 
                 if (length)
+                {
+                	ELECHOUSE_cc1101.EnterIdleMode();
                     exec(buffer);
+                }
 
                 length = 0;
             }

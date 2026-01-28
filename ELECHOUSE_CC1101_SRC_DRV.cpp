@@ -94,6 +94,10 @@ byte clb2[2] = { 31, 38 };
 byte clb3[2] = { 65, 76 };
 byte clb4[2] = { 77, 79 };
 
+
+int16_t mirror[64];
+
+
 static const double XTAL_Mhz=26.0;
 /****************************************************************/
 uint8_t PA_TABLE[8]     { 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
@@ -155,14 +159,46 @@ template <typename T> T regMask( T &final, T newField, uint8_t lhs, uint8_t rhs)
 void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t bits, uint8_t LHS, uint8_t RHS)
 {
 	uint8_t orig = SpiReadReg(regNum);
+	
+	if ( mirror[regNum] >= 0)
+	{
+		if (mirror[regNum] != orig)
+		{
+			Serial.printf(FG_BRED "\n%s REG ERROR %s [0x%X]\n" _DONE, __FUNCTION__, regName, regNum);
+			Serial.printf("\t expect ");
+			binary((uint8_t) mirror[regNum]);
+			Serial.printf("\t found  ");
+			binary(orig);
+			Serial.println();
+		}
+		else
+		{
+			Serial.printf(FG_BGREEN "\n%s REG PASS %s [0x%X]\n" _DONE, __FUNCTION__, regName, regNum);
+			Serial.print("\t expect = found ");
+			binary((uint8_t) mirror[regNum]);
+			Serial.println();
+		}
+	}
+
 	uint8_t temp = orig;
 	Serial.printf("\n[0x%02X] %s\t", regNum, regName ); 
 	uint8_t want = regMask<uint8_t> ( temp, bits, LHS, RHS);
 	
 	//Serial.printf("orig = 0x%02X  want = 0x%02X\n", orig, want);
 	
-	if(orig != want)
+	//if(orig != want)
+	int x;
+	for (x = 0; x < 10; x++)
+	{
 		_SpiWriteReg(regName, regNum, want, 1); //silent
+		delay(1);
+		orig = SpiReadReg(regNum);
+		if (orig == want) break;
+		delay(1);
+	}
+	
+	if (x == 10) Serial.printf(FG_RED "\n%s FAIL TO WRITE %s want 0x%X found 0x%X\n" _DONE, __FUNCTION__, regName, want, orig);
+	
 }	
 
 void bin (unsigned char byte) {
@@ -337,6 +373,8 @@ void ELECHOUSE_CC1101::Reset(void)
     wait4MISO();
 
     digitalWrite(SS_PIN, HIGH);
+    Serial.printf(FG_FYELLOW "%s: RESET !!!! \n", __FUNCTION__);
+	memset(mirror, 0xFF, sizeof(mirror));
 }
 
 
@@ -381,6 +419,9 @@ void ELECHOUSE_CC1101::Init(void)
 void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value, bool bQuiet)
 {
     SpiStart();
+
+    
+	mirror[addr] = value;
     digitalWrite(SS_PIN, LOW);
 
     wait4MISO();
@@ -389,7 +430,8 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value, boo
     MY_SPI.transfer(value);
     digitalWrite(SS_PIN, HIGH);
     SpiEnd();
-    if (!bQuiet) Serial.printf(FG_BRED "\n[0x%02X] %s = 0x%02X\n" _DONE, addr, name, value);
+    
+    if (!bQuiet) Serial.printf(FG_WHITE "\n%s [0x%02X] %s = 0x%02X\n" _DONE, __FUNCTION__, addr, name, value);
 }
 
 
@@ -2409,7 +2451,11 @@ void ELECHOUSE_CC1101::EnterTxMode(void)
     setMHZ(gMHz);
     
     SpiStrobe(CC1101_STX);      //start send
+    
+    Serial.printf(FG_FYELLOW "%s: TX MODE !!!! \n", __FUNCTION__);
     trxstate = MODEM_TX;
+    
+    getState();
 }
 
 
@@ -2424,7 +2470,11 @@ void ELECHOUSE_CC1101::EnterRxMode(void)
 	Serial.printf("************** EnterRxMode ****\n");
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_SRX);      //start receive
+    
+    Serial.printf(FG_FYELLOW "%s: RX MODE !!!! \n", __FUNCTION__);
     trxstate = MODEM_RX;
+    
+    getState();
 }
 
 /****************************************************************
@@ -2439,7 +2489,11 @@ void ELECHOUSE_CC1101::EnterRxMode(float mhz)
     SpiStrobe(CC1101_SIDLE);
     setMHZ(mhz);
     SpiStrobe(CC1101_SRX);      //start receive
+    
+    Serial.printf(FG_FYELLOW "%s: RX MODE + freq !!!! \n", __FUNCTION__);
     trxstate = MODEM_RX;
+    
+    getState();
 }
 
 
@@ -2478,7 +2532,43 @@ byte ELECHOUSE_CC1101::getLqi(void)
     return lqi;
 }
 
-
+byte ELECHOUSE_CC1101::getState(void)
+{
+	byte status;
+	static const char *msg[] = 
+	{
+		"SLEEP",	"SLEEP",	
+		"IDLE",	 	"IDLE",	
+		"XOFF",	 	"XOFF",	
+		"VCOON",	"MANCAL",	
+		"REGON",	"MANCAL",	
+		"MANCAL",	"MANCAL",	
+		"VCOONFS",	"_WAKEUP",	
+		"REGONFS_",	"WAKEUP",	
+		"STARTCAL",	"CALIBRATE",	
+		"BWBOOST",	"SETTLING",	
+		"FS_LOCK",	"SETTLING",	
+		"IFADCON",	"SETTLING",	
+		"ENDCAL",	"CALIBRATE",	
+		"RX",	 	"RX",	
+		"RX_END",	"RX",	
+		"RX_RST",	"RX",	
+		"TXRX_SWITCH",	 	"TXRX_SETTLING",	
+		"RXFIFO_OVERFLOW",	"RXFIFO_OVERFLOW",	
+		"FSTXON",	 		"FSTXON",	
+		"TX",	 			"TX",	
+		"TX_END",	 		"TX",	
+		"RXTX_SWITCH",	 	"RXTX_SETTLING",	
+		"TXFIFO_UNDERFLOW", "TXFIFO_UNDERFLOW	",
+	};
+	
+    status = SpiReadStatus(CC1101_MARCSTATE);
+	Serial.printf(FG_GREEN "%s:  %d = %s\n", __FUNCTION__, status, msg[ status *2 + 1]);
+	
+    
+    return status;
+}
+ 
 /****************************************************************
 * FUNCTION NAME:SetSres
 * FUNCTION     :Reset CC1101
@@ -2503,6 +2593,9 @@ void ELECHOUSE_CC1101::EnterIdleMode(void)
 {
     SpiStrobe(CC1101_SIDLE);
     trxstate = MODEM_IDLE;
+    
+    Serial.printf(FG_FYELLOW "%s: IDLE !!!! \n", __FUNCTION__);
+    getState();
 }
 
 
@@ -2517,6 +2610,8 @@ void ELECHOUSE_CC1101::goSleep(void)
     trxstate = MODEM_IDLE;
     SpiStrobe(0x36);    //Exit RX / TX, turn off frequency synthesizer and exit
     SpiStrobe(0x39);    //Enter power down mode when CSn goes high.
+    
+    Serial.printf(FG_FYELLOW "%s: SLEEP !!!! \n", __FUNCTION__);
 }
 
 
