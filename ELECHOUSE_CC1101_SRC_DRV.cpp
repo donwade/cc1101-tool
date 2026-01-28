@@ -94,7 +94,7 @@ byte pc0LenConf;
 int32_t hwTweakHz_300_348Mhz[2] = {  2000,  3000 };	// made up
 int32_t hwTweakHz_378_464Mhz[2] = {  3000,  4000 };	// made up
 int32_t hwTweakHz_779_899Mhz[2] = {  4000,  5000 };	// made up
-int32_t hwTweakHz_900_928Mhz[2] = { 47666, 47666 };   // CAL'd
+int32_t hwTweakHz_900_928Mhz[2] = { 52666, 52666 };   // CAL'd
 
 
 int16_t mirror[64];

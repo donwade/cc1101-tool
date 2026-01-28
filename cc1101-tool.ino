@@ -36,7 +36,7 @@
 #define EPROMSIZE 512               // Size of EEPROM in your Arduino chip. For ESP32 it is Flash simulated so very slow
 #define BUF_LENGTH 128              // Buffer for the incoming command.
 
-#define DEFAULT_TxFREQ 905 // 866.933
+#define DEFAULT_TxFREQ 866.933  // 905
 
 #define DEFAULT_RxFREQ 867.3875
 
