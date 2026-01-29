@@ -184,7 +184,7 @@ static void cc1101initialize(void)
 
     // Main part to tune CC1101 with proper frequency, modulation and encoding
     ELECHOUSE_cc1101.Init();                // must be set to initialize the cc1101!
-    ELECHOUSE_cc1101.setGDO0(PIN_GDO0);         // set lib internal gdo pin (gdo0). Gdo2 not use for this example.
+    ELECHOUSE_cc1101.defineGDO0_pinNum(PIN_GDO0);         // set lib internal gdo pin (gdo0). Gdo2 not use for this example.
     ELECHOUSE_cc1101.setCCMode(LEGACY_1);          // set config for internal transmission mode. value 0 is for RAW recording/replaying
 
     ELECHOUSE_cc1101.setModulation(3);      	// set modulation mode. 
@@ -388,6 +388,7 @@ static void exec(char *input)
            "flush : Clear the recording buffer\r\n"
            "play <N> : Replay 0 = all frames or N-th recorded frame previously stored in the buffer.\r\n"
    		    "\r\n"
+   		   "rxnew : fsk with SYMBOL clock\r\n"
            "rxraw <microseconds> : Sniffs radio by sampling with <microsecond> interval \n\tand prints received bytes in hex.\r\n"
            "recraw <microseconds> : Recording RAW RF data with <microsecond> sampling interval.\r\n"
            ));
@@ -968,7 +969,7 @@ static void exec(char *input)
 
             //start playing RF with setting GDO0 bit state with bitbanging
             Serial.print(F("\r\nStarting Brute Forcing press any key to stop...\r\n"));
-            ELECHOUSE_cc1101.GDO0_SetPinMode( OUTPUT);
+            ELECHOUSE_cc1101.setGDO0_pinMode( OUTPUT);
 
             for (brute = 0; brute < poweroftwo ; brute++)
             {
@@ -993,7 +994,7 @@ static void exec(char *input)
             ELECHOUSE_cc1101.setCCMode(LEGACY_1);
             ELECHOUSE_cc1101.setPktFormat(0);
             ELECHOUSE_cc1101.EnterTxMode();
-            ELECHOUSE_cc1101.GDO0_SetPinMode(INPUT);
+            ELECHOUSE_cc1101.setGDO0_pinMode(INPUT);
         } // end of IF
         else
         {
@@ -1026,8 +1027,8 @@ static void exec(char *input)
 		ELECHOUSE_cc1101.setModulation(3); //4fsk
 		ELECHOUSE_cc1101.setDataRateKhz(.3);
 
-		Serial.println("wait for 7 seconds");
-		delay(7000);
+		Serial.println("wait for 5 seconds");
+		delay(5000);
 		
         for (int cnt= 0; cnt < 3; cnt++)
         {
@@ -1065,8 +1066,8 @@ static void exec(char *input)
         memcpy(ccsendingbuffer, hexBuffer,  iCnt);  /// ?? strlen(param2) / 2);
         ccsendingbuffer[iCnt] = 0x00;
 
-		Serial.println("wait for 7 seconds");
-		delay(7000);
+		Serial.println("wait for 5 seconds");
+		delay(5000);
 
 		ELECHOUSE_cc1101.EnterIdleMode();
 		ELECHOUSE_cc1101.setModulation(2); //ook
@@ -1112,7 +1113,7 @@ static void exec(char *input)
 
             //start recording to the buffer with bitbanging of GDO0 pin state
             Serial.print(F("\r\nWaiting for radio signal to start RAW recording...\r\n"));
-            ELECHOUSE_cc1101.GDO0_SetPinMode( INPUT);
+            ELECHOUSE_cc1101.setGDO0_pinMode( INPUT);
 
             // this is only for ESP32 boards because they are getting some noise on the beginning
             setting2 = digitalRead(PIN_GDO0);
@@ -1125,8 +1126,7 @@ static void exec(char *input)
             //start recording to the buffer with bitbanging of GDO0 pin state
             Serial.print(F("\r\nStarting RAW recording to the buffer...\r\n"));
 
-			ELECHOUSE_cc1101.setGDO0FallingCallback(doesNothing);
-			ELECHOUSE_cc1101.setGDO0RisingCallback(doesNothing);
+			ELECHOUSE_cc1101.enableRisingIRQ_GDO0(true);
 
             for (int i = 0; i < RECORDINGBUFFERSIZE ; i++)
             {
@@ -1145,8 +1145,7 @@ static void exec(char *input)
 
             Serial.printf("\nRecording RAW data complete. up=%d dn=%d\n", irqUpCtrGDO0, irqDnCtrGDO0);
 
-			ELECHOUSE_cc1101.setGDO0FallingCallback(NULL);
-			ELECHOUSE_cc1101.setGDO0RisingCallback(NULL);
+			ELECHOUSE_cc1101.enableRisingIRQ_GDO0(false);
 
             
             // setting normal pkt format again
@@ -1179,10 +1178,7 @@ static void exec(char *input)
             
             //start recording to the buffer with bitbanging of GDO0 pin state
             Serial.print(F("\r\nSniffer enabled...\r\n"));
-            ELECHOUSE_cc1101.GDO0_SetPinMode(INPUT);
-
-			ELECHOUSE_cc1101.setGDO0FallingCallback(doesNothing);
-			ELECHOUSE_cc1101.setGDO0RisingCallback(doesNothing);
+            ELECHOUSE_cc1101.setGDO0_pinMode(INPUT);
 
             // Any received char over Serial port stops printing  RF received bytes
             while (!Serial.available())
@@ -1218,8 +1214,81 @@ static void exec(char *input)
 
             Serial.printf("\nStopping the sniffer. up=%d dn=%d \n", irqUpCtrGDO0, irqDnCtrGDO0);
             
-			ELECHOUSE_cc1101.setGDO0FallingCallback(NULL);
-			ELECHOUSE_cc1101.setGDO0RisingCallback(NULL);
+            // setting normal pkt format again
+            ELECHOUSE_cc1101.setCCMode(LEGACY_1);
+            ELECHOUSE_cc1101.setPktFormat(0);
+            ELECHOUSE_cc1101.EnterRxMode();
+        }
+        else
+        {
+            Serial.print(F("Wrong parameters.\r\n"));
+        }
+
+    } 
+    else if (strcmp_P(cmd, PSTR("rxnew")) == 0)
+    {
+        // take interval period for samplink
+        //setting = atoi(param2);
+		setting =  (1.e6/9600);
+
+        if (setting > 0)
+        {
+            // setup async mode on CC1101 with GDO0 pin processing
+            ELECHOUSE_cc1101.setCCMode(SYMBOL_TICK);
+            ELECHOUSE_cc1101.setModulation(3); //fsk-4
+            ELECHOUSE_cc1101.EnterRxMode();
+            
+            //start recording to the buffer with bitbanging of GDO0 pin state
+            Serial.print(F("\r\n New Sniffer enabled...\r\n"));
+            ELECHOUSE_cc1101.setGDO2_pinMode(INPUT);
+
+			ELECHOUSE_cc1101.enableRisingIRQ_GDO2(true);
+
+            // Any received char over Serial port stops printing  RF received bytes
+
+            uint32_t start = micros();
+            while (!Serial.available())
+            {
+
+            	bool ret = ELECHOUSE_cc1101.wait4RisingIRQ_GDO2();
+
+            	Serial.printf("ret = %d\n", ret);
+#if 0
+			
+                // we have to use the buffer not to introduce delays
+                for (int i = 0; i < RECORDINGBUFFERSIZE ; i++)
+                {
+                    byte receivedbyte = 0;
+
+                    for (int j = 7; j > -1; j--)                        // 8 bits in a byte
+                    {
+                        bitWrite(receivedbyte, j, digitalRead(PIN_GDO0));   // Capture GDO0 state into the byte
+                        delayMicroseconds(setting);                     // delay for selected sampling interval
+                    }
+
+                    ;
+                    // store the output into recording buffer
+                    bigrecordingbuffer[i] = receivedbyte;
+                }
+
+                ;
+
+                // when buffer full print the ouptput to serial port
+                for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
+                {
+                    asciitohex(&bigrecordingbuffer[i], hexBuffer, 32);
+                    Serial.print((char *)hexBuffer);
+                }
+
+#endif
+            }; // end of While loop
+
+            uint32_t deltaT = micros() - start;
+
+            Serial.printf("\nStopping the new sniffer. up=%d dn=%d \n", irqUpCtrGDO2, irqDnCtrGDO2);
+            Serial.printf("\nbitrate = %f\n", (float) irqUpCtrGDO2 / (float) deltaT);
+            
+			ELECHOUSE_cc1101.enableRisingIRQ_GDO2(false);
 
 
             // setting normal pkt format again
@@ -1253,7 +1322,7 @@ static void exec(char *input)
             
             //start replaying GDO0 bit state from data in the buffer with bitbanging
             Serial.print(F("\r\nReplaying RAW data from the buffer...\r\n"));
-            ELECHOUSE_cc1101.GDO0_SetPinMode( OUTPUT);
+            ELECHOUSE_cc1101.setGDO0_pinMode( OUTPUT);
 
             for (int i = 1; i < RECORDINGBUFFERSIZE ; i++)
             {
@@ -1271,7 +1340,7 @@ static void exec(char *input)
             ELECHOUSE_cc1101.setCCMode(LEGACY_1);
             ELECHOUSE_cc1101.setPktFormat(0);
             ELECHOUSE_cc1101.EnterTxMode();
-            ELECHOUSE_cc1101.GDO0_SetPinMode(INPUT);
+            ELECHOUSE_cc1101.setGDO0_pinMode(INPUT);
         }
         else
         {

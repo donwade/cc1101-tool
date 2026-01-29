@@ -20,12 +20,21 @@
 
 #define LINE Serial.printf(">>> %s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
 
-SemaphoreHandle_t sem_DATA_READY = xSemaphoreCreateBinary();
+SemaphoreHandle_t sem_GDO0_UP = xSemaphoreCreateBinary();
+SemaphoreHandle_t sem_GDO0_DN = xSemaphoreCreateBinary();
+SemaphoreHandle_t sem_GDO2_UP = xSemaphoreCreateBinary();
+SemaphoreHandle_t sem_GDO2_DN = xSemaphoreCreateBinary();
 
-void (*GDO0_fallingCallback)();
-void (*GDO0_risingCallback)();
-void (*GDO2_fallingCallback)();
-void (*GDO2_risingCallback)();
+bool GDO0_waitFalling();
+bool GDO0_waitRising();
+bool GDO2_waitFalling();
+bool GDO2_waitRising();
+
+bool bGDO0_HasFallingCallback;
+bool bGDO0_HasRisingCallback;
+bool bGDO2_HasFallingCallback;
+bool bGDO2_HasRisingCallback;
+
 
 uint32_t irqUpCtrGDO0;
 uint32_t irqDnCtrGDO0;
@@ -186,21 +195,19 @@ void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t bits
 	Serial.printf("\n[0x%02X] %s\t", regNum, regName ); 
 	uint8_t want = regMask<uint8_t> ( temp, bits, LHS, RHS);
 	
-	//Serial.printf("orig = 0x%02X  want = 0x%02X\n", orig, want);
 	
-	//if(orig != want)
-	int x;
-	for (x = 0; x < 10; x++)
+	if(orig != want)
 	{
-		_SpiWriteReg(regName, regNum, want, 1); //silent
-		delay(1);
-		orig = SpiReadReg(regNum);
-		if (orig == want) break;
-		delay(1);
-	}
-	
-	if (x == 10) Serial.printf(FG_RED "\n%s FAIL TO WRITE %s want 0x%X found 0x%X\n" _DONE, __FUNCTION__, regName, want, orig);
-	
+		int x;
+		for (x = 0; x < 10; x++)
+		{
+			_SpiWriteReg(regName, regNum, want, 1); //silent
+			orig = SpiReadReg(regNum);
+			if (orig == want) break;
+		}
+		
+		if (x == 10) Serial.printf(FG_RED "\n%s FAIL TO WRITE %s want 0x%X found 0x%X\n" _DONE, __FUNCTION__, regName, want, orig);
+	}	
 }	
 
 void bin (unsigned char byte) {
@@ -224,6 +231,7 @@ void ELECHOUSE_CC1101::DumpRegs(void)
 		Serial.println();
 	}
 }
+//-------------------------------------------------------------
 
 ICACHE_RAM_ATTR void onGDO0_IRQ(void)
 {
@@ -231,24 +239,30 @@ ICACHE_RAM_ATTR void onGDO0_IRQ(void)
 	
 	irqDeltaTimeGDO0 = now - irqLastTimeGDO0;
 	irqLastTimeGDO0 = now;
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	
 	if (digitalRead(GDO0))
 	{
-		if (GDO0_risingCallback)
+		if (bGDO0_HasRisingCallback)
 		{
 			irqUpCtrGDO0++;
-			GDO0_risingCallback();
+			xSemaphoreGiveFromISR( sem_GDO0_UP, &xHigherPriorityTaskWoken );
 		}
 	}
 	else
 	{
-		if (GDO0_fallingCallback)
+		if (bGDO0_HasFallingCallback)
 		{
 			irqDnCtrGDO0++;
-			GDO0_fallingCallback();
+			xSemaphoreGiveFromISR( sem_GDO0_DN, &xHigherPriorityTaskWoken );
 		}
 	}
+	
+	// wake up task that needs it.
+	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
 }
+
+//-------------------------------------------------------------
 
 ICACHE_RAM_ATTR void onGDO2_IRQ(void)
 {
@@ -256,23 +270,27 @@ ICACHE_RAM_ATTR void onGDO2_IRQ(void)
 	
 	irqDeltaTimeGDO2 = now - irqLastTimeGDO2;
 	irqLastTimeGDO2 = now;
-
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	
 	if (digitalRead(GDO2))
 	{
-		if (GDO2_risingCallback)
+		if (bGDO2_HasRisingCallback)
 		{
 			irqUpCtrGDO2++;
-			GDO2_risingCallback();
+			xSemaphoreGiveFromISR( sem_GDO2_UP, &xHigherPriorityTaskWoken );
 		}
 	}
 	else
 	{
-		if (GDO2_fallingCallback)
+		if (bGDO2_HasFallingCallback)
 		{
 			irqDnCtrGDO2++;
-			GDO2_fallingCallback();
+			xSemaphoreGiveFromISR( sem_GDO2_DN, &xHigherPriorityTaskWoken );
 		}
 	}
+	
+	// wake up task that needs it.
+	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
 }
 
 
@@ -294,9 +312,7 @@ void ELECHOUSE_CC1101::SpiStart(void)
    
    // enable MY_SPI
 #ifdef ESP32
-    LINE;
     //MY_SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
-    LINE;
 #else
     MY_SPI.begin();
 	#error NOPE
@@ -326,8 +342,8 @@ void ELECHOUSE_CC1101::SpiEnd(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::GDOx_SetPinMode(void)
 {
-    GDO0_SetPinMode(OUTPUT);
-    GDO2_SetPinMode(INPUT);
+    setGDO0_pinMode(OUTPUT);
+    setGDO2_pinMode(INPUT);
     
     irqDirGDO0 = -1;
     irqDirGDO2 = -1;
@@ -341,13 +357,13 @@ void ELECHOUSE_CC1101::GDOx_SetPinMode(void)
 * INPUT        : none
 * OUTPUT       : none
 ****************************************************************/
-void ELECHOUSE_CC1101::GDO0_SetPinMode(int8_t direction)
+void ELECHOUSE_CC1101::setGDO0_pinMode(int8_t direction)
 {
 	Serial.printf("\nGDO0 pin %d set to %s\n", GDO0, direction == INPUT? "INPUT":"OUTPUT");
     pinMode(GDO0, direction);
 }
 
-void ELECHOUSE_CC1101::GDO2_SetPinMode(int8_t direction)
+void ELECHOUSE_CC1101::setGDO2_pinMode(int8_t direction)
 {
 	Serial.printf("\nGDO2 pin %d set to %s\n", GDO2, direction == INPUT? "INPUT":"OUTPUT");
     pinMode(GDO2, direction);
@@ -425,6 +441,7 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value, boo
     
 	mirror[addr] = value;
     digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
 
     wait4MISO();
 
@@ -473,10 +490,12 @@ void ELECHOUSE_CC1101::SpiStrobe(byte strobe)
 {
     SpiStart();
     digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
 
     wait4MISO();
     
     MY_SPI.transfer(strobe);
+    digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
 
     SpiEnd();
@@ -521,6 +540,7 @@ void ELECHOUSE_CC1101::SpiReadBurstReg(byte addr, byte *buffer, byte num)
     SpiStart();
     temp = addr | READ_BURST;
     digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
 
     wait4MISO();
 
@@ -530,6 +550,8 @@ void ELECHOUSE_CC1101::SpiReadBurstReg(byte addr, byte *buffer, byte num)
         buffer[i] = MY_SPI.transfer(0);
 
     digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+    
     SpiEnd();
 }
 
@@ -605,17 +627,15 @@ void ELECHOUSE_CC1101::setSpiPin(byte sck, byte miso, byte mosi, byte ss)
 
 
 /****************************************************************
-
-
 * FUNCTION NAME:GDO0 IRQ falling callback
 ****************************************************************/
-void ELECHOUSE_CC1101::setGDO0FallingCallback(void (*function_pointer_name)())
+void ELECHOUSE_CC1101::enableFallingIRQ_GDO0(bool bEnable)
 {
-	GDO0_fallingCallback = function_pointer_name;
 	Serial.printf(FG_FYELLOW);
 	
-	if (function_pointer_name)
+	if (bEnable)
 	{
+		bGDO0_HasFallingCallback = true;
 	    if (irqDirGDO0 == FALLING || irqDirGDO0 == CHANGE )
 	    {
 			Serial.printf("%s no change\n", __FUNCTION__);
@@ -644,6 +664,7 @@ void ELECHOUSE_CC1101::setGDO0FallingCallback(void (*function_pointer_name)())
 	}
 	else
 	{
+		bGDO0_HasFallingCallback = false;
 		//disconnecting.
 		if (irqDirGDO0 == FALLING )
 		{
@@ -663,12 +684,12 @@ void ELECHOUSE_CC1101::setGDO0FallingCallback(void (*function_pointer_name)())
 /****************************************************************
 * FUNCTION NAME:GDO0 IRQ rising callback
 ****************************************************************/
-void ELECHOUSE_CC1101::setGDO0RisingCallback(void (*function_pointer_name)())
+void ELECHOUSE_CC1101::enableRisingIRQ_GDO0(bool bEnable)
 {
 	Serial.printf(FG_FYELLOW);
 	
-	GDO0_risingCallback = function_pointer_name;
-	if (function_pointer_name)
+	bGDO0_HasRisingCallback = bEnable;
+	if (bEnable)
 	{
 	    if (irqDirGDO0 == RISING || irqDirGDO0 == CHANGE ) 
 	    {
@@ -712,15 +733,17 @@ void ELECHOUSE_CC1101::setGDO0RisingCallback(void (*function_pointer_name)())
 	Serial.printf(_DONE);
 }
 
+
 /****************************************************************
 * FUNCTION NAME:GDO2 IRQ falling callback
 ****************************************************************/
-void ELECHOUSE_CC1101::setGDO2FallingCallback(void (*function_pointer_name)())
+void ELECHOUSE_CC1101::enableFallingIRQ_GDO2(bool bEnable)
 {
 	Serial.printf(FG_FYELLOW);
-	GDO2_fallingCallback = function_pointer_name;
-	if (function_pointer_name)
+	
+	if (bEnable)
 	{
+		bGDO2_HasFallingCallback = true;
 	    if (irqDirGDO2 == FALLING || irqDirGDO2 == CHANGE )
 	    {
 			Serial.printf("%s no change\n", __FUNCTION__);
@@ -735,6 +758,7 @@ void ELECHOUSE_CC1101::setGDO2FallingCallback(void (*function_pointer_name)())
 	    	// rising in use.
 	    	attachInterrupt(GDO2, onGDO2_IRQ, CHANGE);
 			irqDirGDO2 = CHANGE;
+			
 			irqDnCtrGDO2 = irqUpCtrGDO2 = 0;
 			Serial.printf("%s CHANGE mode\n", __FUNCTION__);
 			Serial.printf(_DONE);
@@ -748,6 +772,7 @@ void ELECHOUSE_CC1101::setGDO2FallingCallback(void (*function_pointer_name)())
 	}
 	else
 	{
+		bGDO2_HasFallingCallback = false;
 		//disconnecting.
 		if (irqDirGDO2 == FALLING )
 		{
@@ -767,11 +792,12 @@ void ELECHOUSE_CC1101::setGDO2FallingCallback(void (*function_pointer_name)())
 /****************************************************************
 * FUNCTION NAME:GDO2 IRQ rising callback
 ****************************************************************/
-void ELECHOUSE_CC1101::setGDO2RisingCallback(void (*function_pointer_name)())
+void ELECHOUSE_CC1101::enableRisingIRQ_GDO2(bool bEnable)
 {
 	Serial.printf(FG_FYELLOW);
-	GDO2_risingCallback = function_pointer_name;
-	if (function_pointer_name)
+	
+	bGDO2_HasRisingCallback = bEnable;
+	if (bEnable)
 	{
 	    if (irqDirGDO2 == RISING || irqDirGDO2 == CHANGE ) 
 	    {
@@ -779,7 +805,7 @@ void ELECHOUSE_CC1101::setGDO2RisingCallback(void (*function_pointer_name)())
 			Serial.printf(_DONE);
 	    	return;
 	    }
-	    
+		
 	    irqUpCtrGDO2 = 0;
 
 	    if (irqDirGDO2 == FALLING) 
@@ -811,8 +837,35 @@ void ELECHOUSE_CC1101::setGDO2RisingCallback(void (*function_pointer_name)())
 		irqDirGDO2 = FALLING;
 		Serial.printf("%s no change\n", __FUNCTION__);
 	}
+	
 	Serial.printf(_DONE);
 }
+
+
+bool ELECHOUSE_CC1101::wait4RisingIRQ_GDO0(void)
+{
+	int ret1 = xSemaphoreTake( sem_GDO0_UP, pdMS_TO_TICKS(3000));
+	return (ret1 == pdTRUE) ? true : false;
+}
+
+bool ELECHOUSE_CC1101::wait4FallingIRQ_GDO0(void)
+{
+	int ret1 = xSemaphoreTake( sem_GDO0_DN, pdMS_TO_TICKS(3000));
+	return (ret1 == pdTRUE) ? true : false;
+}
+
+bool ELECHOUSE_CC1101::wait4RisingIRQ_GDO2(void)
+{
+	int ret1 = xSemaphoreTake( sem_GDO2_UP, pdMS_TO_TICKS(3000));
+	return (ret1 == pdTRUE) ? true : false;
+}
+
+bool ELECHOUSE_CC1101::wait4FallingIRQ_GDO2(void)
+{
+	int ret1 = xSemaphoreTake( sem_GDO2_DN, pdMS_TO_TICKS(3000));
+	return (ret1 == pdTRUE) ? true : false;
+}
+
 
 
 
@@ -836,10 +889,10 @@ void ELECHOUSE_CC1101::setGDOx(byte gdo0, byte gdo2)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setGDO0(byte gdo0)
+void ELECHOUSE_CC1101::defineGDO0_pinNum(byte gdo0)
 {
     GDO0 = gdo0;
-    GDO0_SetPinMode(INPUT);
+    setGDO0_pinMode(INPUT);
 }
 
 //------------------
@@ -909,6 +962,11 @@ void ELECHOUSE_CC1101::setGDOxPinConfig(uint8_t reg, uint8_t value)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
+
+void callme(void)
+{
+}
+
 void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
 {
     ccmode = s;
@@ -923,22 +981,33 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
         setLengthConfig(1);
 
         setDataRateKhz(0.097);
-        //SpiWriteReg(CC1101_MDMCFG3, 0xF8);
-        //SpiWriteReg(CC1101_MDMCFG4, 11 + m4RxBw);
     }
-    else
+    else if (ccmode == LEGACY_0)
     {
         setGDOxPinConfig(CC1101_IOCFG2, 0x0D);
         setGDOxPinConfig(CC1101_IOCFG0, 0x0D);
         
         //SpiWriteReg(CC1101_PKTCTRL0, 0x32);
         setPktFormat(3);
-        setLengthConfig(2);
+        setLengthConfig(2);		// infinite
 
 		setDataRateKhz(4.800);
-        //SpiWriteReg(CC1101_MDMCFG3, 0x93);
-        //SpiWriteReg(CC1101_MDMCFG4, 7 + m4RxBw);
     }
+    else if (ccmode == SYMBOL_TICK)
+    {
+        setGDOxPinConfig(CC1101_IOCFG2, 0x1D); // SYMBOL TICK
+        setGDOxPinConfig(CC1101_IOCFG0, 0x0D);
+        
+        setPktFormat(3);		//data in on GDO0 data out on GDOx
+        setLengthConfig(2);  	// infinite
+
+		setDataRateKhz(4.800);
+		enableRisingIRQ_GDO2(callme);
+	}
+	else
+		assert(ccmode != ccmode);
+		
+  
 
     setModulation(modulation);
 }

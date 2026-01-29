@@ -23,7 +23,7 @@ typedef enum
 {
     LEGACY_0,
     LEGACY_1,
-    DONS_MODE
+    SYMBOL_TICK
 }eGDIO_MODES;
 
 typedef enum {
@@ -149,13 +149,14 @@ void Split_PKTCTRL1(void);
 void Split_MDMCFG1(void);
 void Split_MDMCFG2(void);
 void Split_MDMCFG4(void);
+
 public:
 void DumpRegs(void);
 void Init(void);
 byte SpiReadStatus(byte addr);
 void setSpiPin(byte sck, byte miso, byte mosi, byte ss);
 void setGDOx(byte gdo0, byte gdo2);
-void setGDO0(byte gdo0);
+void defineGDO0_pinNum(byte gdo0);
 void setTxFifoThreshold(uint8_t v);
 void setCCMode(eGDIO_MODES s);
 void setModulation(byte m);
@@ -164,10 +165,19 @@ void setMHZ(float mhz);
 float getMHZ(void);
 void setGDOxPinConfig(uint8_t reg, uint8_t value);
 
-void setGDO0FallingCallback(void (*usrCallback)());
-void setGDO0RisingCallback(void (*usrCallback)());
-void setGDO2FallingCallback(void (*usrCallback)());
-void setGDO2RisingCallback(void (*usrCallback)());
+void enableRisingIRQ_GDO0(bool bEnable);
+void enableFallingIRQ_GDO0(bool bEnable);
+
+void enableRisingIRQ_GDO2(bool bEnable);
+void enableFallingIRQ_GDO2(bool bEnable);
+
+bool wait4RisingIRQ_GDO0(void);
+bool wait4FallingIRQ_GDO0(void);
+
+bool wait4RisingIRQ_GDO2(void);
+bool wait4FallingIRQ_GDO2(void);
+
+
 
 float setOSCdrift(float hz);
 void setLogicalChanNum(byte chnl);
@@ -219,8 +229,8 @@ void setCRC_AF(bool v);
 void setAppendStatus(bool v);
 void setAdrChk(byte v);
 bool CheckRxFifo(int t);
-void GDO0_SetPinMode(int8_t direction = INPUT);
-void GDO2_SetPinMode(int8_t direction = INPUT);
+void setGDO0_pinMode(int8_t direction = INPUT);
+void setGDO2_pinMode(int8_t direction = INPUT);
 
 private:
 
@@ -237,6 +247,10 @@ extern uint32_t irqDnCtrGDO2;
 extern uint32_t irqDeltaTimeGDO0;
 extern uint32_t irqDeltaTimeGDO2;
 
+extern SemaphoreHandle_t sem_GDO0_UP ;
+extern SemaphoreHandle_t sem_GDO0_DN ;
+extern SemaphoreHandle_t sem_GDO2_UP ;
+extern SemaphoreHandle_t sem_GDO2_DN ;
 
 
 extern ELECHOUSE_CC1101 ELECHOUSE_cc1101;
