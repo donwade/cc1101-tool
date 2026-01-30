@@ -110,6 +110,8 @@ int16_t mirror[64];
 
 
 static const double XTAL_Mhz=26.0;
+static const double XTAL_Hz=( 26.0 * 1e6);
+
 /****************************************************************/
 uint8_t PA_TABLE[8]     { 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 //                       -30  -20  -15  -10   0    5    7    10
@@ -184,10 +186,10 @@ void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t bits
 		}
 		else
 		{
-			Serial.printf(FG_BGREEN "\n%s REG PASS %s [0x%X]\n" _DONE, __FUNCTION__, regName, regNum);
-			Serial.print("\t expect = found ");
-			binary((uint8_t) mirror[regNum]);
-			Serial.println();
+			// Serial.printf(FG_BGREEN "\n%s REG PASS %s [0x%X]\n" _DONE, __FUNCTION__, regName, regNum);
+			// Serial.print("\t expect = found ");
+			// binary((uint8_t) mirror[regNum]);
+			// Serial.println();
 		}
 	}
 
@@ -294,11 +296,6 @@ ICACHE_RAM_ATTR void onGDO2_IRQ(void)
 }
 
 
-void wait4MISO(void)
-{
-	//while(digitalRead(MISO_PIN));
-}
-
 /****************************************************************
 * FUNCTION NAME:SpiStart
 * FUNCTION     :spi communication start
@@ -342,8 +339,8 @@ void ELECHOUSE_CC1101::SpiEnd(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::GDOx_SetPinMode(void)
 {
-    setGDO0_pinMode(OUTPUT);
-    setGDO2_pinMode(INPUT);
+    setGDO0_hostpinMode(OUTPUT);
+    setGDO2_hostpinMode(INPUT);
     
     irqDirGDO0 = -1;
     irqDirGDO2 = -1;
@@ -357,13 +354,13 @@ void ELECHOUSE_CC1101::GDOx_SetPinMode(void)
 * INPUT        : none
 * OUTPUT       : none
 ****************************************************************/
-void ELECHOUSE_CC1101::setGDO0_pinMode(int8_t direction)
+void ELECHOUSE_CC1101::setGDO0_hostpinMode(int8_t direction)
 {
 	Serial.printf("\nGDO0 pin %d set to %s\n", GDO0, direction == INPUT? "INPUT":"OUTPUT");
     pinMode(GDO0, direction);
 }
 
-void ELECHOUSE_CC1101::setGDO2_pinMode(int8_t direction)
+void ELECHOUSE_CC1101::setGDO2_hostpinMode(int8_t direction)
 {
 	Serial.printf("\nGDO2 pin %d set to %s\n", GDO2, direction == INPUT? "INPUT":"OUTPUT");
     pinMode(GDO2, direction);
@@ -386,9 +383,7 @@ void ELECHOUSE_CC1101::Reset(void)
 
     digitalWrite(SS_PIN, LOW);
 
-    wait4MISO();
     MY_SPI.transfer(CC1101_SRES);
-    wait4MISO();
 
     digitalWrite(SS_PIN, HIGH);
     Serial.printf(FG_FYELLOW "%s: RESET !!!! \n", __FUNCTION__);
@@ -443,8 +438,6 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value, boo
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
 
-    wait4MISO();
-
     MY_SPI.transfer(addr);
     MY_SPI.transfer(value);
     digitalWrite(SS_PIN, HIGH);
@@ -467,8 +460,6 @@ void ELECHOUSE_CC1101::SpiWriteBurstReg(byte addr, byte *buffer, byte num)
     SpiStart();
     temp = addr | WRITE_BURST;
     digitalWrite(SS_PIN, LOW);
-
-    wait4MISO();
     
     MY_SPI.transfer(temp);
 
@@ -492,8 +483,6 @@ void ELECHOUSE_CC1101::SpiStrobe(byte strobe)
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
 
-    wait4MISO();
-    
     MY_SPI.transfer(strobe);
     digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
@@ -515,8 +504,6 @@ byte ELECHOUSE_CC1101::SpiReadReg(byte addr)
     SpiStart();
     temp = addr | READ_SINGLE;
     digitalWrite(SS_PIN, LOW);
-
-    wait4MISO();
 
     MY_SPI.transfer(temp);
     value = MY_SPI.transfer(0);
@@ -541,8 +528,6 @@ void ELECHOUSE_CC1101::SpiReadBurstReg(byte addr, byte *buffer, byte num)
     temp = addr | READ_BURST;
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
-
-    wait4MISO();
 
     MY_SPI.transfer(temp);
 
@@ -569,8 +554,6 @@ byte ELECHOUSE_CC1101::SpiReadStatus(byte addr)
     SpiStart();
     temp = addr | READ_BURST;
     digitalWrite(SS_PIN, LOW);
-
-	wait4MISO();
 
     MY_SPI.transfer(temp);
     value = MY_SPI.transfer(0);
@@ -892,7 +875,7 @@ void ELECHOUSE_CC1101::setGDOx(byte gdo0, byte gdo2)
 void ELECHOUSE_CC1101::defineGDO0_pinNum(byte gdo0)
 {
     GDO0 = gdo0;
-    setGDO0_pinMode(INPUT);
+    setGDO0_hostpinMode(INPUT);
 }
 
 //------------------
@@ -936,23 +919,23 @@ PIN_DEF pin_defs[] =
 
 
 //------------------
-void ELECHOUSE_CC1101::setGDOxPinConfig(uint8_t reg, uint8_t value)
+void ELECHOUSE_CC1101::setGDOxPinConfig(uint8_t pinRegNum, uint8_t value, bool bSilent)
 {
 	int i;
 	uint8_t end = sizeof(pin_defs)/sizeof(pin_defs[0]);
 
-	Serial.printf(FG_BCYAN);
+	assert(CC1101_IOCFG2 == pinRegNum || CC1101_IOCFG0 == pinRegNum);
+
 	for (i = 0; i < end; i++)
 	{
 		if (pin_defs[i].opcode != value) continue;
-		Serial.printf("\n%s [0x%02X] %s\n", reg ? "GDO2":"GDO0", value, pin_defs[i].msg);
+		if (!bSilent) Serial.printf(FG_BCYAN "\n%s [0x%02X] %s\n" _DONE, pinRegNum ? "GDO2":"GDO0", value, pin_defs[i].msg);
 		break;
 	}
 	
-	if (i == end) Serial.printf("\n%s [0x%02X] %s\n", reg ? "GDO2":"GDO0", value, "see documentation"); 
-	Serial.printf(_DONE);
+	if (i == end) Serial.printf(FG_BCYAN "\n%s ERROR ?? [0x%02X] %s\n" _DONE, pinRegNum ? "GDO2":"GDO0", value, "see documentation"); 
 	
-	SpiWriteReg(reg, value);
+	_SpiWriteReg("CC1101_IOCFGx", pinRegNum, value, 1);  //silent please.
 
 	
 }
@@ -995,6 +978,10 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
     }
     else if (ccmode == SYMBOL_TICK)
     {
+
+		setGDO0_hostpinMode(INPUT);
+		setGDO2_hostpinMode(INPUT);
+	
         setGDOxPinConfig(CC1101_IOCFG2, 0x1D); // SYMBOL TICK
         setGDOxPinConfig(CC1101_IOCFG0, 0x0D);
         
@@ -2239,8 +2226,15 @@ void ELECHOUSE_CC1101::setDataRateKhz(float dRate)
 		// chip lockup if lt 54. Pin it!
 		if (!lockExp && lockMantissa < 54) lockMantissa = 54;
 	}
+
+	// test lockMantissa = 34;
+	// test lockExp = 12;
 	
-	Serial.printf("\t\t\tlock Mant=%d Exp=%d\n" _DONE, lockMantissa, lockExp);
+	float resultHz = ( 256. + (float)lockMantissa) * (float)(1<< lockExp) * XTAL_Hz 
+					/ (float)(1 << 28);
+					
+	Serial.printf(FG_BGREEN "\t\tlock Mant=%d Exp=%d Result=%f\n" _DONE, 
+			lockMantissa, lockExp, resultHz);
 	
     regRMW(CC1101_MDMCFG4, lockExp, 3, 0);
     regRMW(CC1101_MDMCFG3, lockMantissa, 7, 0);
@@ -2317,8 +2311,14 @@ void ELECHOUSE_CC1101::setDeviation(float fdev)
 	}
 	regRMW(CC1101_DEVIATN, lockMantissa, 2, 0);
 	regRMW(CC1101_DEVIATN, lockExp, 6, 4);
+
+#if 1
+	float result = XTAL_Hz 
+					* (8. + lockMantissa) * (float) (1<< lockExp)
+					/(float)(2<<17);
+#endif
 	
-	Serial.printf("\tlock Mant=%d Exp=%d\n", lockMantissa, lockExp);
+	Serial.printf("\tlock Mant=%d Exp=%d final=%f\n", lockMantissa, lockExp, result);
 #endif
 }
 

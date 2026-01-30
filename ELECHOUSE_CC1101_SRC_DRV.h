@@ -163,7 +163,7 @@ void setModulation(byte m);
 void setPA(int p);
 void setMHZ(float mhz);
 float getMHZ(void);
-void setGDOxPinConfig(uint8_t reg, uint8_t value);
+void setGDOxPinConfig(uint8_t reg, uint8_t value, bool bSilent=false);
 
 void enableRisingIRQ_GDO0(bool bEnable);
 void enableFallingIRQ_GDO0(bool bEnable);
@@ -229,8 +229,8 @@ void setCRC_AF(bool v);
 void setAppendStatus(bool v);
 void setAdrChk(byte v);
 bool CheckRxFifo(int t);
-void setGDO0_pinMode(int8_t direction = INPUT);
-void setGDO2_pinMode(int8_t direction = INPUT);
+void setGDO0_hostpinMode(int8_t direction = INPUT);
+void setGDO2_hostpinMode(int8_t direction = INPUT);
 
 private:
 
