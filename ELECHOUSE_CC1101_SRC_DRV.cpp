@@ -100,10 +100,10 @@ byte pc0LenConf;
 
 
 // NOTE: this is now expressed in hertz, not Smartnet vals
-int32_t hwTweakHz_300_348Mhz[2] = {  2000,  3000 };	// made up
-int32_t hwTweakHz_378_464Mhz[2] = {  3000,  4000 };	// made up
-int32_t hwTweakHz_779_899Mhz[2] = {  4000,  5000 };	// made up
-int32_t hwTweakHz_900_928Mhz[2] = { 52666, 52666 };   // CAL'd
+int32_t hwTweakHz_300_348Mhz[2] = {  2000,    3000 };	// made up
+int32_t hwTweakHz_378_464Mhz[2] = {  3000,    4000 };	// made up
+int32_t hwTweakHz_779_899Mhz[2] = { -25261, -25261 };	// CAL'd
+int32_t hwTweakHz_900_928Mhz[2] = { 52666, 52666 }; // CAL'd
 
 
 int16_t mirror[64];
@@ -929,11 +929,11 @@ void ELECHOUSE_CC1101::setGDOxPinConfig(uint8_t pinRegNum, uint8_t value, bool b
 	for (i = 0; i < end; i++)
 	{
 		if (pin_defs[i].opcode != value) continue;
-		if (!bSilent) Serial.printf(FG_BCYAN "\n%s [0x%02X] %s\n" _DONE, pinRegNum ? "GDO2":"GDO0", value, pin_defs[i].msg);
+		if (!bSilent) Serial.printf(FG_BCYAN "\n%s [0x%02X] %s\n" _DONE, pinRegNum == CC1101_IOCFG2 ? "GDO2":"GDO0", value, pin_defs[i].msg);
 		break;
 	}
 	
-	if (i == end) Serial.printf(FG_BCYAN "\n%s ERROR ?? [0x%02X] %s\n" _DONE, pinRegNum ? "GDO2":"GDO0", value, "see documentation"); 
+	if (i == end) Serial.printf(FG_BCYAN "\n%s ERROR ?? [0x%02X] %s\n" _DONE, pinRegNum , value, "see documentation"); 
 	
 	_SpiWriteReg("CC1101_IOCFGx", pinRegNum, value, 1);  //silent please.
 
@@ -956,8 +956,13 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
 
     if (ccmode == LEGACY_1)
     {
-        setGDOxPinConfig(CC1101_IOCFG2, 0x0B);
-        setGDOxPinConfig(CC1101_IOCFG0, 0x06);
+    	Serial.printf(FG_RED "%s: ccmode = LEGACY1 ---------------\n" _DONE, __FUNCTION__);
+
+		setGDO0_hostpinMode(INPUT);
+		setGDO2_hostpinMode(INPUT);
+
+        setGDOxPinConfig(CC1101_IOCFG0, 0x06); // + sync sent .... - packet send
+        setGDOxPinConfig(CC1101_IOCFG2, 0x0B); // serial data OUT on GDO2
 
         //SpiWriteReg(CC1101_PKTCTRL0, 0x05);
         setPktFormat(0);
@@ -967,8 +972,12 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
     }
     else if (ccmode == LEGACY_0)
     {
-        setGDOxPinConfig(CC1101_IOCFG2, 0x0D);
-        setGDOxPinConfig(CC1101_IOCFG0, 0x0D);
+		setGDO0_hostpinMode(INPUT);
+		setGDO2_hostpinMode(INPUT);
+		
+    	Serial.printf(FG_RED "%s: ccmode = LEGACY0 ---------------\n" _DONE, __FUNCTION__);
+        setGDOxPinConfig(CC1101_IOCFG2, 0x0D); 	// serial data out
+        setGDOxPinConfig(CC1101_IOCFG0, 0x0D);	// serial data out
         
         //SpiWriteReg(CC1101_PKTCTRL0, 0x32);
         setPktFormat(3);
@@ -978,6 +987,7 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
     }
     else if (ccmode == SYMBOL_TICK)
     {
+    	Serial.printf(FG_RED "%s: ccmode = SYMBOL_TICK ---------------\n" _DONE, __FUNCTION__);
 
 		setGDO0_hostpinMode(INPUT);
 		setGDO2_hostpinMode(INPUT);
@@ -1275,7 +1285,8 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 #else    
    	uint32_t  temp;
 
-    Calibrate();
+	if (mhz == 0.0 ) mhz = gMHz;
+	
 
 	float adjFreq = mhz + tweakFreqHz/1e6;
 	
@@ -1289,6 +1300,8 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 	SpiWriteReg(CC1101_FREQ0,  temp       & 0xFF);
 	
 	gMHz= mhz;
+
+    Calibrate();
 
 #if 0
 	// verify.
@@ -1321,15 +1334,16 @@ void ELECHOUSE_CC1101::Calibrate(void)
 	//CC1101_TEST0 = no clue. Too obtuse.
 
 	const int32_t hzPerStep = (XTAL_Mhz * 1e6)/(float) (1<<14);
+	Serial.printf(FG_GREEN "%s hz/step = %d\n" _DONE, __FUNCTION__, hzPerStep); 
 	
 	
     if (gMHz >= 300 && gMHz <= 348)
     {
     	
         int32_t offset =(CC1101_FSCTRL0, map(gMHz, 300, 348, hwTweakHz_300_348Mhz[0], hwTweakHz_300_348Mhz[1]));
-		Serial.printf(FG_GREEN "%s offset added is %d hz\n" _DONE, __FUNCTION__, offset); 
+		Serial.printf(FG_GREEN "%s 300->348 a %d hz internal HW offset to %f \n" _DONE, __FUNCTION__, offset, gMHz); 
         
-        SpiWriteReg(CC1101_FSCTRL0,  (uint8_t) offset / hzPerStep);
+        SpiWriteReg(CC1101_FSCTRL0, offset / hzPerStep);
 
         if (gMHz < 322.88)
         {
@@ -1350,9 +1364,9 @@ void ELECHOUSE_CC1101::Calibrate(void)
     else if (gMHz >= 378 && gMHz <= 464)
     {
         int32_t offset =(CC1101_FSCTRL0, map(gMHz, 378, 464, hwTweakHz_378_464Mhz[0], hwTweakHz_378_464Mhz[1]));
-		Serial.printf(FG_GREEN "%s offset added is %d hz\n" _DONE, __FUNCTION__, offset); 
+		Serial.printf(FG_GREEN "%s 378->464 a %d hz internal HW offset to %f \n" _DONE, __FUNCTION__, offset, gMHz); 
         
-        SpiWriteReg(CC1101_FSCTRL0,  (uint8_t) offset / hzPerStep);
+        SpiWriteReg(CC1101_FSCTRL0, offset / hzPerStep);
 
         if (gMHz < 430.5)
         {
@@ -1374,9 +1388,9 @@ void ELECHOUSE_CC1101::Calibrate(void)
     {
     
 		int32_t offset =(CC1101_FSCTRL0, map(gMHz, 779, 899, hwTweakHz_779_899Mhz[0], hwTweakHz_779_899Mhz[1]));
-		Serial.printf(FG_GREEN "%s offset added is %d hz\n" _DONE, __FUNCTION__, offset); 
+		Serial.printf(FG_GREEN "%s 779->899 a %d hz internal HW offset to %f \n" _DONE, __FUNCTION__, offset, gMHz); 
 		
-		SpiWriteReg(CC1101_FSCTRL0,  (uint8_t) offset / hzPerStep);
+		SpiWriteReg(CC1101_FSCTRL0, offset / hzPerStep);
 	
         if (gMHz < 861)
         {
@@ -1397,10 +1411,8 @@ void ELECHOUSE_CC1101::Calibrate(void)
     else if (gMHz >= 900 && gMHz <= 928)
     {
 
-		// Serial.printf("kkkkkkkkkkkkkkkkkkkkkkkk %d\n", hzPerStep);
-		
 		int32_t offset =(CC1101_FSCTRL0, map(gMHz, 900, 928, hwTweakHz_900_928Mhz[0], hwTweakHz_900_928Mhz[1]));
-		Serial.printf(FG_GREEN "%s offset added is %d hz\n" _DONE, __FUNCTION__, offset); 
+		Serial.printf(FG_GREEN "%s 900->928 a %d hz internal HW offset to %f \n" _DONE, __FUNCTION__, offset, gMHz); 
 
 		Serial.printf("note: %d %d\n", offset / hzPerStep,  (uint8_t)( offset / hzPerStep));
 		SpiWriteReg(CC1101_FSCTRL0, (uint8_t)(offset / hzPerStep));
@@ -1457,8 +1469,12 @@ void ELECHOUSE_CC1101::setCalibrationOffset(byte b, int32_t low, int32_t  high)
 bool ELECHOUSE_CC1101::getCC1101(void)
 {
     setSpi();
-
-    if (SpiReadStatus(0x31) > 0)
+	
+    uint8_t foo = SpiReadStatus(0x31);
+    Serial.printf("h/w version %d\n", foo); 
+    delay(2000);
+    
+    if (foo > 0)
         return 1;
     else
         return 0;
@@ -2810,42 +2826,37 @@ void ELECHOUSE_CC1101::goSleep(void)
 
 
 /****************************************************************
-* FUNCTION NAME:Char direct SendData
+* FUNCTION NAME:Char direct SendDataCharArray
 * FUNCTION     :use CC1101 send data
 * INPUT        :txBuffer: data array to send; size: number of data to send, no more than 61
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::SendData(char *txchar)
+void ELECHOUSE_CC1101::SendDataCharArray(char *txchar)
 {
-    int len = strlen(txchar);
-    byte chartobyte[len];
-
-    for (int i = 0; i < len; i++)
-        chartobyte[i] = txchar[i];
-
-    SendData(chartobyte, len);
+    SendBinaryData((byte *) txchar, strlen(txchar)+1 );  // +1 send null terminator too!
 }
 
 #include <string>
 #include <cstring> 
 
 
-void ELECHOUSE_CC1101::SendData(String &txchar)
+void ELECHOUSE_CC1101::SendDataCppString(String &txchar)
 {
     int len = txchar.length();
     char chartobyte[len+1];
 
 	strcpy (chartobyte, txchar.c_str());
 
-    SendData((byte*)chartobyte, len);
+    // a CString has no null terminator.... just send len
+    SendBinaryData((byte*)chartobyte, len); 
 }
 /****************************************************************
-* FUNCTION NAME:SendData
+* FUNCTION NAME:SendBinaryData
 * FUNCTION     :use CC1101 send data
 * INPUT        :txBuffer: data array to send; size: number of data to send, no more than 61
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
+void ELECHOUSE_CC1101::SendBinaryData(byte *txBuffer, byte size)
 {
 	if (gMHz > 866 && gMHz < 868) Serial.printf("***** DANGER TX FREQ = %f\n", gMHz);
 
@@ -2856,7 +2867,9 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_STX);      //start send
 
+	Serial.printf("waiting for GDO0 up\n");
     while (!digitalRead(GDO0)); // -> sync transmitted
+	Serial.printf("waiting for GDO0 dn\n");
     while ( digitalRead(GDO0)); // -> end of packet
 
     SpiStrobe(CC1101_SFTX);                 //flush TXfifo
@@ -2865,30 +2878,12 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 
 
 /****************************************************************
-* FUNCTION NAME:Char direct SendData
+* FUNCTION NAME:SendBinaryDataWithNoGDO
 * FUNCTION     :use CC1101 send data without GDO
 * INPUT        :txBuffer: data array to send; size: number of data to send, no more than 61
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::SendData(char *txchar, int t)
-{
-    int len = strlen(txchar);
-    byte chartobyte[len];
-
-    for (int i = 0; i < len; i++)
-        chartobyte[i] = txchar[i];
-
-    SendData(chartobyte, len, t);
-}
-
-
-/****************************************************************
-* FUNCTION NAME:SendData
-* FUNCTION     :use CC1101 send data without GDO
-* INPUT        :txBuffer: data array to send; size: number of data to send, no more than 61
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size, int t)
+void ELECHOUSE_CC1101::SendBinaryDataWithNoGDO(byte *txBuffer, byte size, int t)
 {
 	if (gMHz > 866 && gMHz < 868) Serial.printf("*****  DANGER TX FREQ = %f\n", gMHz);
 

@@ -137,13 +137,18 @@ class ELECHOUSE_CC1101
 {
 private:
 void _regRMW(const char *name, uint8_t register, uint8_t val, uint8_t LHS, uint8_t RHS);
+
 void SpiStart(void);
 void SpiEnd(void);
+
 void GDOx_SetPinMode(void);
 void Reset(void);
+
 void setSpi(void);
+
 void RegConfigSettings(void);
 void Calibrate(void);
+
 void Split_PKTCTRL0(void);
 void Split_PKTCTRL1(void);
 void Split_MDMCFG1(void);
@@ -161,7 +166,9 @@ void setTxFifoThreshold(uint8_t v);
 void setCCMode(eGDIO_MODES s);
 void setModulation(byte m);
 void setPA(int p);
-void setMHZ(float mhz);
+
+void setMHZ(float mhz = 0.0);
+
 float getMHZ(void);
 void setGDOxPinConfig(uint8_t reg, uint8_t value, bool bSilent=false);
 
@@ -196,11 +203,11 @@ byte getState(void);
 void setSres(void);
 void EnterIdleMode(void);
 void goSleep(void);
-void SendData(byte *txBuffer, byte size);
-void SendData(char *txchar);
-void SendData(byte *txBuffer, byte size, int t);
-void SendData(char *txchar, int t);
-void SendData(String &txchar);
+void SendBinaryData(byte *txBuffer, byte size);
+void SendDataCharArray(char *txchar);
+void SendBinaryDataWithNoGDO(byte *txBuffer, byte size, int t);
+void SendBinaryData(char *txchar, int t);
+void SendDataCppString(String &txchar);
 
 byte CheckReceiveFlag(void);
 byte ReceiveData(byte *rxBuffer);

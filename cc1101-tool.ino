@@ -23,7 +23,7 @@
 //----
 
 
-#include <M5Unified.h>
+//#include <M5Unified.h>
 
 #define LINE Serial.printf("%s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
 
@@ -36,7 +36,7 @@
 #define EPROMSIZE 512               // Size of EEPROM in your Arduino chip. For ESP32 it is Flash simulated so very slow
 #define BUF_LENGTH 128              // Buffer for the incoming command.
 
-#define DEFAULT_TxFREQ 866.9625   // 905
+#define DEFAULT_TxFREQ  867.010  //905. //866.9375     //866.8875 	//866.9625   // 905
 
 #define DEFAULT_RxFREQ 867.38751
 
@@ -99,72 +99,56 @@ byte ccsendingbuffer[CCBUFFERSIZE * 2] = { 0 };
 byte bigrecordingbuffer[RECORDINGBUFFERSIZE] = { 0 };
 
 // buffer for hex to ascii conversions
-byte textBuffer[BUF_LENGTH];
+char textBuffer[RECORDINGBUFFERSIZE * 2 + 1];
+
+
 //char hexBuffer[BUF_LENGTH];
 // convert bytes in table to string with hex numbers
-void asciitohex(byte *ascii_ptr, byte *hex_ptr, int len)
+
+void binToAscii(byte *asciiIn, char *hexOut, int len)
 {
-    byte i, j, k;
 
-    for (i = 0; i < len; i++)
-    {
-        // high byte first
-        j = ascii_ptr[i] / 16;
-
-        if (j > 9)
-            k = j - 10 + 65;
-        else
-            k = j + 48;
-
-        hex_ptr[2 * i] = k;
-        // low byte second
-        j = ascii_ptr[i] % 16;
-
-        if (j > 9)
-            k = j - 10 + 65;
-        else
-            k = j + 48;
-
-        hex_ptr[(2 * i) + 1] = k;
-    }
-
-    ;
-    hex_ptr[(2 * i) + 2] = '\0';
+	int i;
+	for (i = 0; i < len; i++)
+	{
+		sprintf(&hexOut[i * 2], "%02X", asciiIn[i]);
+	}
+	hexOut[i] = 0;  // overrun if not overallocated.
 }
 
 
 // convert string with hex numbers to array of bytes
-int  hextoascii(byte *ascii_ptr, byte *hex_ptr, int len)
+int  hextoascii(char *pAsciiOut, byte *pHexIn, int len)
 {
     byte i, j;
 
     for (i = 0; i < (len / 2); i++)
     {
-        j = hex_ptr[i * 2];
+        j = pHexIn[i * 2];
 
         if ((j > 47) && (j < 58))
-            ascii_ptr[i] = (j - 48) * 16;
+            pAsciiOut[i] = (j - 48) * 16;
 
         if ((j > 64) && (j < 71))
-            ascii_ptr[i] = (j - 55) * 16;
+            pAsciiOut[i] = (j - 55) * 16;
 
         if ((j > 96) && (j < 103))
-            ascii_ptr[i] = (j - 87) * 16;
+            pAsciiOut[i] = (j - 87) * 16;
 
-        j = hex_ptr[i * 2 + 1];
+        j = pHexIn[i * 2 + 1];
 
         if ((j > 47) && (j < 58))
-            ascii_ptr[i] = ascii_ptr[i] + (j - 48);
+            pAsciiOut[i] = pAsciiOut[i] + (j - 48);
 
         if ((j > 64) && (j < 71))
-            ascii_ptr[i] = ascii_ptr[i] + (j - 55);
+            pAsciiOut[i] = pAsciiOut[i] + (j - 55);
 
         if ((j > 96) && (j < 103))
-            ascii_ptr[i] = ascii_ptr[i] + (j - 87);
+            pAsciiOut[i] = pAsciiOut[i] + (j - 87);
     }
 
     
-    ascii_ptr[i++] = '\0';
+    pAsciiOut[i++] = '\0';
     return i;
 }
 
@@ -1028,15 +1012,15 @@ static void exec(char *input)
 		Serial.println("wait for 5 seconds");
 		delay(5000);
 		
-        for (int cnt= 0; cnt < 10; cnt++)
+        for (int cnt= 0; cnt < 5; cnt++)
         {
         	int j;
-	        Serial.printf("\r\nTransmitting RF packet %d of 10.\r\n", cnt);
+	        Serial.printf("\r\nTransmitting RF packet %d of 5.\r\n", cnt);
 
 			for (int i= 0; i < iCnt; i++) randomBytes[i] = random(255);
         
         	// send these data to radio over CC1101
-        	ELECHOUSE_cc1101.SendData(randomBytes, sizeof(randomBytes));
+        	ELECHOUSE_cc1101.SendBinaryData(randomBytes, sizeof(randomBytes));
 
         	delay(1000);
 
@@ -1059,39 +1043,39 @@ static void exec(char *input)
     }
     else if (strcmp_P(cmd, PSTR("cal")) == 0)
     {
-    	const char testString[] = "0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F ";
+    	byte binaryArray[50];
 
         // convert hex array to set of bytes
-        int iCnt = sizeof(textBuffer);
-
-#if 0
-        iCnt =hextoascii(textBuffer, (byte *) testString, strlen(testString));
-#else
-		for (int i= 0; i < iCnt; i++) textBuffer[i] = random(255);
-#endif
-        
-        memcpy(ccsendingbuffer, textBuffer,  iCnt);  /// ?? strlen(param2) / 2);
-        ccsendingbuffer[iCnt] = 0x00;
-
-		Serial.println("wait for 5 seconds");
-		delay(5000);
+        int iCnt = sizeof(binaryArray);
 
 		ELECHOUSE_cc1101.EnterIdleMode();
+		
+		ELECHOUSE_cc1101.setCCMode(LEGACY_1);  //gdO = SYNC+Sent
 		ELECHOUSE_cc1101.setModulation(2); //ook
 		ELECHOUSE_cc1101.setDataRateKhz(.3);
+		ELECHOUSE_cc1101.setMHZ();
+		
+		Serial.println("wait for 5 seconds");
+		delay(5000);
 		
         for (int cnt= 0; cnt < 3; cnt++)
         {
 	        Serial.printf("\r\nTransmitting RF packet %d of 3.\r\n", cnt);
-        
-        	// send these data to radio over CC1101
-        	ELECHOUSE_cc1101.SendData(ccsendingbuffer, iCnt);
 
-        	delay(500);
-	        asciitohex(ccsendingbuffer, textBuffer, iCnt);
+			for (int i= 0; i < iCnt; i++) binaryArray[i] = random(255);
+
+        	// send these data to radio over CC1101
+			//ELECHOUSE_cc1101.SendBinaryDataWithNoGDO(binaryArray, iCnt, 1000);
+
+			ELECHOUSE_cc1101.SendBinaryData(binaryArray, iCnt);
+
+        	delay(200);
+        	char temp[iCnt * 2 + 1];
+        	
+	        binToAscii(binaryArray, temp, iCnt);
 	        
 	        Serial.print(F("Sent frame: "));
-	        Serial.print((char *)textBuffer);
+	        Serial.print((char *)temp);
 	        Serial.print(F("\r\n"));
 			// for DEBUG only
 		}
@@ -1212,7 +1196,7 @@ static void exec(char *input)
                 // when buffer full print the ouptput to serial port
                 for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
                 {
-                    asciitohex(&bigrecordingbuffer[i], textBuffer, 32);
+                    binToAscii(&bigrecordingbuffer[i], textBuffer, 32);
                     Serial.print((char *)textBuffer);
                 }
 
@@ -1292,7 +1276,7 @@ static void exec(char *input)
                 // when buffer full print the ouptput to serial port
                 for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
                 {
-                    asciitohex(&bigrecordingbuffer[i], textBuffer, 32);
+                    binToAscii(&bigrecordingbuffer[i], textBuffer, 32);
                     Serial.print((char *)textBuffer);
                 }
 
@@ -1374,7 +1358,7 @@ static void exec(char *input)
 
         for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
         {
-            asciitohex(&bigrecordingbuffer[i], textBuffer, 32);
+            binToAscii(&bigrecordingbuffer[i], textBuffer, 32);
             Serial.print((char *)textBuffer);
         }
 
@@ -1390,7 +1374,7 @@ static void exec(char *input)
 
         for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
         {           // first convert to hex numbers
-            asciitohex((byte *)&bigrecordingbuffer[i], (byte *)textBuffer, 32);
+            binToAscii((byte *)&bigrecordingbuffer[i], textBuffer, 32);
 
             // now decode as binary and print
             for (setting = 0; setting < 64 ; setting++)
@@ -1488,7 +1472,7 @@ static void exec(char *input)
         if ((len <= 120) && (len > 0))
         {
             // convert the hex content to array of bytes
-            hextoascii(textBuffer, (byte *)cmd_args, len);
+            hextoascii(textBuffer, (byte *) cmd_args, len);
             len = len / 2;
 
             // check if the frame fits into the buffer and store it
@@ -1576,7 +1560,7 @@ static void exec(char *input)
                         // take next frame from the buffer  for replay
                         memcpy(ccsendingbuffer, &bigrecordingbuffer[bigrecordingbufferpos + 1], len);
                         // send these data to radio over CC1101
-                        ELECHOUSE_cc1101.SendData(ccsendingbuffer, (byte)len);
+                        ELECHOUSE_cc1101.SendBinaryData(ccsendingbuffer, (byte)len);
                     }
 
                     ;
@@ -1670,8 +1654,8 @@ static void exec(char *input)
                     for (setting2 = 0; setting2 < BUF_LENGTH; setting2++)
                         textBuffer[setting2] = 0;
 
-                    ;
-                    asciitohex(&bigrecordingbuffer[bigrecordingbufferpos + 1], textBuffer, len);
+                    
+                    binToAscii(&bigrecordingbuffer[bigrecordingbufferpos + 1], textBuffer, len);
                     Serial.print(F("\r\nFrame "));
                     Serial.print(setting);
                     Serial.print(F(" : "));
@@ -1763,15 +1747,27 @@ static void exec(char *input)
 
 
 // include the library                                                                     
-#include <_m5Core2-only.h>
-//#include <M5Unified.h>
-#include <_viewController.h>
+//#include <_m5Core2-only.h>
+//#include <_viewController.h>
+
+#include <M5Unified.h>
+#include <Wire.h>
+
 #include "built_on.h"
 
 
 void setup()
 {
+	// POWER UP THE BUS !!!!!! spi always has power, the BUS does NOT
+	// POWER UP THE BUS !!!!!! spi always has power, the BUS does NOT
+	// POWER UP THE BUS !!!!!! spi always has power, the BUS does NOT
 
+	M5.begin(); // POWER UP THE BUS !!!!!!
+	
+	// POWER UP THE BUS !!!!!! spi always has power, the BUS does NOT
+	// POWER UP THE BUS !!!!!! spi always has power, the BUS does NOT
+	// POWER UP THE BUS !!!!!! spi always has power, the BUS does NOT
+	
 #if defined (ARDUINO_M5STACK_CORES3)
     pinMode(19, INPUT);     // S3 bug. Jtag messes up Usb serial
 #endif
@@ -1872,7 +1868,7 @@ void loop()
             ccsendingbuffer[i] = '\0';
 
             // send these data to radio over CC1101
-            ELECHOUSE_cc1101.SendData((char *)ccsendingbuffer);
+            ELECHOUSE_cc1101.SendDataCharArray((char *)ccsendingbuffer);
 
 
         }
@@ -1960,7 +1956,7 @@ void loop()
                 //Print received packet as set of hex values directly
                 // not to loose any data in buffer
                 // asciitohex((byte *)ccreceivingbuffer, (byte *)hexBuffer,  len);
-                asciitohex(ccreceivingbuffer, textBuffer, len);
+                binToAscii(ccreceivingbuffer, textBuffer, len);
                 Serial.print((char *)textBuffer);
                 // set RX  mode again
                 ELECHOUSE_cc1101.EnterRxMode();
@@ -2020,7 +2016,7 @@ void loop()
 
         ;
         // send these data to radio over CC1101
-        ELECHOUSE_cc1101.SendData(ccsendingbuffer, 60);
+        ELECHOUSE_cc1101.SendBinaryData(ccsendingbuffer, 60);
     }
 
     ;
