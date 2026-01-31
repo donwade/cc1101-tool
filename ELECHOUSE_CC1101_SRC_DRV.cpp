@@ -2243,13 +2243,101 @@ void ELECHOUSE_CC1101::setDataRateKhz(float dRate)
 }
 
 
+
 /****************************************************************
-* FUNCTION NAME:Set Devitation
+* FUNCTION NAME:Set setSymbolSpacingHz
 * FUNCTION     :none
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setDeviation(float fdev)
+void ELECHOUSE_CC1101::setSymbolSpacingHz(float HzBetweenSymbol)
+{
+#if OEM_CODE
+    float f = 1.586914;
+    float v = 0.19836425;
+    int c = 0;
+
+    if (HzBetweenSymbol > 380.859375)
+        HzBetweenSymbol = 380.859375;
+
+    if (HzBetweenSymbol < 1.586914)
+        HzBetweenSymbol = 1.586914;
+
+    for (int i = 0; i < 255; i++)
+    {
+        f += v;
+
+        if (c == 7)
+        {
+            v *= 2; c = -1; i += 8;
+        }
+
+        if (f >= HzBetweenSymbol)
+        {
+            c = i; i = 255;
+        }
+
+        c++;
+    }
+
+    SpiWriteReg(21, c);
+#else
+	int16_t exp;
+	float mantissa;
+	int32_t iMant;
+
+	int16_t lockExp = -1;
+	int16_t lockMantissa = -1;
+
+	Serial.printf(FG_MAGENTA "\n%s: setting deviation (max pull left or right) = %5.2f khz\n" _DONE, __FUNCTION__, HzBetweenSymbol);
+	HzBetweenSymbol *= 4.0;   // four posts
+	HzBetweenSymbol /= 3.;		// three panels
+	
+ 	float FIXED = HzBetweenSymbol * (float)(1 << 17)/ (XTAL_Mhz * 1.e6 );
+
+	for (exp = 0; exp < 8; exp++)  // exp reg is 3 bits.
+	{
+		float expTest = (float)(1 << exp);
+		float mantissa = ((FIXED - 8 * expTest)) /expTest;
+		iMant = mantissa;
+		Serial.printf("\t\texp=%d  mant=%d\n", exp, (int)mantissa);
+
+		if (iMant < 0) continue;	// negative is bad for pll
+		if (iMant > 7) continue;	// can't fit in a 3 bit register
+
+		if (lockExp < 0)
+		{
+			lockExp = exp;
+			lockMantissa = iMant;
+		}
+	}
+	regRMW(CC1101_DEVIATN, lockMantissa, 2, 0);
+	regRMW(CC1101_DEVIATN, lockExp, 6, 4);
+
+
+	//lockMantissa = 1;
+	//lockExp = 1;       // 1785 pull hi or low
+
+	for (int lockM = lockMantissa -1; lockM < lockMantissa+2; lockM++)
+	{
+#if 1
+	float result = XTAL_Hz 
+					* (8. + lockM) * (float) (1<< lockExp)
+					/(float)(2<<17);
+#endif
+	
+	Serial.printf("\tlock Mant=%d Exp=%d final= +/- %f\n", lockM, lockExp, result);
+#endif
+	}
+}
+
+/****************************************************************
+* FUNCTION NAME:Set setDeviation_FSK2
+* FUNCTION     :none
+* INPUT        :none
+* OUTPUT       :none
+****************************************************************/
+void ELECHOUSE_CC1101::setDeviation_FSK2(float fdev)
 {
 #if OEM_CODE
     float f = 1.586914;
@@ -2288,7 +2376,7 @@ void ELECHOUSE_CC1101::setDeviation(float fdev)
 	int16_t lockExp = -1;
 	int16_t lockMantissa = -1;
 
-	Serial.printf(FG_MAGENTA "\n%s: setting deviation = %5.2f khz\n" _DONE, __FUNCTION__, fdev);
+	Serial.printf(FG_MAGENTA "\n%s: setting deviation (max pull left or right) = %5.2f khz\n" _DONE, __FUNCTION__, fdev);
 
 	fdev *= 1000.;
 	float FIXED = fdev * (float)(1 << 17)/ (XTAL_Mhz * 1.e6 );
@@ -2312,14 +2400,21 @@ void ELECHOUSE_CC1101::setDeviation(float fdev)
 	regRMW(CC1101_DEVIATN, lockMantissa, 2, 0);
 	regRMW(CC1101_DEVIATN, lockExp, 6, 4);
 
+
+	//lockMantissa = 1;
+	//lockExp = 1;       // 1785 pull hi or low
+
+	for (int lockM = lockMantissa -1; lockM < lockMantissa+2; lockM++)
+	{
 #if 1
 	float result = XTAL_Hz 
-					* (8. + lockMantissa) * (float) (1<< lockExp)
+					* (8. + lockM) * (float) (1<< lockExp)
 					/(float)(2<<17);
 #endif
 	
-	Serial.printf("\tlock Mant=%d Exp=%d final=%f\n", lockMantissa, lockExp, result);
+	Serial.printf("\tlock Mant=%d Exp=%d final= +/- %f\n", lockM, lockExp, result);
 #endif
+	}
 }
 
 

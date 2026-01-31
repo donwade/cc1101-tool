@@ -36,7 +36,7 @@
 #define EPROMSIZE 512               // Size of EEPROM in your Arduino chip. For ESP32 it is Flash simulated so very slow
 #define BUF_LENGTH 128              // Buffer for the incoming command.
 
-#define DEFAULT_TxFREQ 905. //866.933  // 905
+#define DEFAULT_TxFREQ 866.9625   // 905
 
 #define DEFAULT_RxFREQ 867.38751
 
@@ -92,14 +92,14 @@ static bool do_echo = true;
 byte ccreceivingbuffer[CCBUFFERSIZE] = { 0 };
 
 // buffer for sending  CC1101
-byte ccsendingbuffer[CCBUFFERSIZE] = { 0 };
+byte ccsendingbuffer[CCBUFFERSIZE * 2] = { 0 };
 //char ccsendingbuffer[CCBUFFERSIZE] = {0};
 
 // buffer for recording and replaying of many frames
 byte bigrecordingbuffer[RECORDINGBUFFERSIZE] = { 0 };
 
 // buffer for hex to ascii conversions
-byte hexBuffer[BUF_LENGTH];
+byte textBuffer[BUF_LENGTH];
 //char hexBuffer[BUF_LENGTH];
 // convert bytes in table to string with hex numbers
 void asciitohex(byte *ascii_ptr, byte *hex_ptr, int len)
@@ -195,7 +195,7 @@ static void cc1101initialize(void)
     											//	4 = MSK.
     											
     ELECHOUSE_cc1101.setMHZ(DEFAULT_TxFREQ);  	// Here you can set your basic frequency. The lib calculates the frequency automatically (default = 433.92).The cc1101 can: 300-348 MHZ, 387-464MHZ and 779-928MHZ. Read More info from datasheet.
-    ELECHOUSE_cc1101.setDeviation(1.8);    		// Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.
+    ELECHOUSE_cc1101.setSymbolSpacingHz(1200);  // Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.
     
     ELECHOUSE_cc1101.setLogicalChanNum(0);         	// Set the Channelnumber from 0 to 255. Default is cahnnel 0.
 
@@ -444,7 +444,7 @@ static void exec(char *input)
     else if (strcmp_P(cmd, PSTR("setdeviation")) == 0)
     {
         nextParam = atof(cmd_args);
-        ELECHOUSE_cc1101.setDeviation(nextParam);
+        ELECHOUSE_cc1101.setDeviation_FSK2(nextParam);
         Serial.print(F("\r\nDeviation: "));
         Serial.print(nextParam);
         Serial.print(F(" KHz\r\n"));
@@ -1005,33 +1005,23 @@ static void exec(char *input)
     }
     else if (strcmp_P(cmd, PSTR("tx")) == 0)
     {
-    	const char testString[] = "0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F ";
-
+    	byte randomBytes[50];  
+    	assert (sizeof(randomBytes) < 60);
+ 
         // convert hex array to set of bytes
-        int iCnt = sizeof(hexBuffer);
+        int iCnt = sizeof(randomBytes);
 
-#if 0
-		iCnt =hextoascii(hexBuffer, (byte *) testString, strlen(testString));
-#else
-		for (int i= 0; i < iCnt; i++) hexBuffer[i] = random(255);
-#endif
-
-     	// none provided use canned string
-        iCnt =hextoascii(hexBuffer, (byte *) testString, strlen(testString));
-         
-        memcpy(ccsendingbuffer, hexBuffer,  iCnt);  /// ?? strlen(param2) / 2);
-        ccsendingbuffer[iCnt] = 0x00;
 
 		ELECHOUSE_cc1101.EnterIdleMode();
 #if 0
 		ELECHOUSE_cc1101.setModulation(3); //4fsk
 		ELECHOUSE_cc1101.setDataRateKhz(4.8);
-		ELECHOUSE_cc1101.setDeviation(1.8);
+		ELECHOUSE_cc1101.setDeviation_FSK2(1.8);
 		ELECHOUSE_cc1101.setNumPreambleBytes (7);  // long preamble
 #else
 		ELECHOUSE_cc1101.setModulation(3); //4fsk
 		ELECHOUSE_cc1101.setDataRateKhz(.3);
-		ELECHOUSE_cc1101.setDeviation(10.);
+		ELECHOUSE_cc1101.setSymbolSpacingHz(1200);
 		ELECHOUSE_cc1101.setNumPreambleBytes (7);  // long preamble
 #endif
 
@@ -1040,16 +1030,25 @@ static void exec(char *input)
 		
         for (int cnt= 0; cnt < 10; cnt++)
         {
+        	int j;
 	        Serial.printf("\r\nTransmitting RF packet %d of 10.\r\n", cnt);
+
+			for (int i= 0; i < iCnt; i++) randomBytes[i] = random(255);
         
         	// send these data to radio over CC1101
-        	ELECHOUSE_cc1101.SendData(ccsendingbuffer, iCnt);
+        	ELECHOUSE_cc1101.SendData(randomBytes, sizeof(randomBytes));
 
         	delay(1000);
-	        asciitohex(ccsendingbuffer, hexBuffer, iCnt);
-	        
+
+        	char abuf[iCnt * 2 + 1];
 	        Serial.print(F("Sent frame: "));
-	        Serial.print((char *)hexBuffer);
+	        for (j = 0; j < iCnt; j++)
+	        {
+	        	sprintf(&abuf[j*2], "%02X", randomBytes[j]);
+	        }
+	        abuf[j] = 0;
+	        
+	        Serial.print(abuf);
 	        Serial.print(F("\r\n"));
 			// for DEBUG only
 		}
@@ -1063,15 +1062,15 @@ static void exec(char *input)
     	const char testString[] = "0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F 0 1 2 3 4 5 6 7 8 9 A B C D E F ";
 
         // convert hex array to set of bytes
-        int iCnt = sizeof(hexBuffer);
+        int iCnt = sizeof(textBuffer);
 
 #if 0
-        iCnt =hextoascii(hexBuffer, (byte *) testString, strlen(testString));
+        iCnt =hextoascii(textBuffer, (byte *) testString, strlen(testString));
 #else
-		for (int i= 0; i < iCnt; i++) hexBuffer[i] = random(255);
+		for (int i= 0; i < iCnt; i++) textBuffer[i] = random(255);
 #endif
         
-        memcpy(ccsendingbuffer, hexBuffer,  iCnt);  /// ?? strlen(param2) / 2);
+        memcpy(ccsendingbuffer, textBuffer,  iCnt);  /// ?? strlen(param2) / 2);
         ccsendingbuffer[iCnt] = 0x00;
 
 		Serial.println("wait for 5 seconds");
@@ -1089,10 +1088,10 @@ static void exec(char *input)
         	ELECHOUSE_cc1101.SendData(ccsendingbuffer, iCnt);
 
         	delay(500);
-	        asciitohex(ccsendingbuffer, hexBuffer, iCnt);
+	        asciitohex(ccsendingbuffer, textBuffer, iCnt);
 	        
 	        Serial.print(F("Sent frame: "));
-	        Serial.print((char *)hexBuffer);
+	        Serial.print((char *)textBuffer);
 	        Serial.print(F("\r\n"));
 			// for DEBUG only
 		}
@@ -1213,8 +1212,8 @@ static void exec(char *input)
                 // when buffer full print the ouptput to serial port
                 for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
                 {
-                    asciitohex(&bigrecordingbuffer[i], hexBuffer, 32);
-                    Serial.print((char *)hexBuffer);
+                    asciitohex(&bigrecordingbuffer[i], textBuffer, 32);
+                    Serial.print((char *)textBuffer);
                 }
 
 
@@ -1293,8 +1292,8 @@ static void exec(char *input)
                 // when buffer full print the ouptput to serial port
                 for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
                 {
-                    asciitohex(&bigrecordingbuffer[i], hexBuffer, 32);
-                    Serial.print((char *)hexBuffer);
+                    asciitohex(&bigrecordingbuffer[i], textBuffer, 32);
+                    Serial.print((char *)textBuffer);
                 }
 
 #endif
@@ -1375,8 +1374,8 @@ static void exec(char *input)
 
         for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
         {
-            asciitohex(&bigrecordingbuffer[i], hexBuffer, 32);
-            Serial.print((char *)hexBuffer);
+            asciitohex(&bigrecordingbuffer[i], textBuffer, 32);
+            Serial.print((char *)textBuffer);
         }
 
         Serial.print(F("\r\n"));
@@ -1391,12 +1390,12 @@ static void exec(char *input)
 
         for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
         {           // first convert to hex numbers
-            asciitohex((byte *)&bigrecordingbuffer[i], (byte *)hexBuffer, 32);
+            asciitohex((byte *)&bigrecordingbuffer[i], (byte *)textBuffer, 32);
 
             // now decode as binary and print
             for (setting = 0; setting < 64 ; setting++)
             {
-                setting2 = hexBuffer[setting];
+                setting2 = textBuffer[setting];
 
                 switch (setting2)
                 {
@@ -1489,13 +1488,13 @@ static void exec(char *input)
         if ((len <= 120) && (len > 0))
         {
             // convert the hex content to array of bytes
-            hextoascii(hexBuffer, (byte *)cmd_args, len);
+            hextoascii(textBuffer, (byte *)cmd_args, len);
             len = len / 2;
 
             // check if the frame fits into the buffer and store it
             if ((bigrecordingbufferpos + len) < RECORDINGBUFFERSIZE)
             {          // copy current frame and increase pointer for next frames
-                memcpy(&bigrecordingbuffer[bigrecordingbufferpos], &hexBuffer, len);
+                memcpy(&bigrecordingbuffer[bigrecordingbufferpos], &textBuffer, len);
                 // increase position in big recording buffer for next frame
                 bigrecordingbufferpos = bigrecordingbufferpos + len;
                 Serial.print(F("\r\nChunk added to recording buffer\r\n"));
@@ -1618,7 +1617,7 @@ static void exec(char *input)
         if ((len <= 120) && (len > 0))
         {
             // convert the hex content to array of bytes
-            hextoascii(hexBuffer, (byte *)cmd_args, len);
+            hextoascii(textBuffer, (byte *)cmd_args, len);
             len = len / 2;
 
             // check if the frame fits into the buffer and store it
@@ -1627,7 +1626,7 @@ static void exec(char *input)
                 bigrecordingbuffer[bigrecordingbufferpos] = len;
                 bigrecordingbufferpos++;
                 // next - copy current frame and increase
-                memcpy(&bigrecordingbuffer[bigrecordingbufferpos], &hexBuffer, len);
+                memcpy(&bigrecordingbuffer[bigrecordingbufferpos], &textBuffer, len);
                 // increase position in big recording buffer for next frame
                 bigrecordingbufferpos = bigrecordingbufferpos + len;
                 // increase counter of frames stored
@@ -1669,14 +1668,14 @@ static void exec(char *input)
                     // take next frame from the buffer  for replay
                     // flush hexBuffer
                     for (setting2 = 0; setting2 < BUF_LENGTH; setting2++)
-                        hexBuffer[setting2] = 0;
+                        textBuffer[setting2] = 0;
 
                     ;
-                    asciitohex(&bigrecordingbuffer[bigrecordingbufferpos + 1], hexBuffer, len);
+                    asciitohex(&bigrecordingbuffer[bigrecordingbufferpos + 1], textBuffer, len);
                     Serial.print(F("\r\nFrame "));
                     Serial.print(setting);
                     Serial.print(F(" : "));
-                    Serial.print((char *)hexBuffer);
+                    Serial.print((char *)textBuffer);
                     Serial.print(F("\r\n"));
                 }
 
@@ -1954,15 +1953,15 @@ void loop()
 
                 // flush hexBuffer
                 for (int i = 0; i < BUF_LENGTH; i++)
-                    hexBuffer[i] = 0;
+                    textBuffer[i] = 0;
 
                 ;
 
                 //Print received packet as set of hex values directly
                 // not to loose any data in buffer
                 // asciitohex((byte *)ccreceivingbuffer, (byte *)hexBuffer,  len);
-                asciitohex(ccreceivingbuffer, hexBuffer, len);
-                Serial.print((char *)hexBuffer);
+                asciitohex(ccreceivingbuffer, textBuffer, len);
+                Serial.print((char *)textBuffer);
                 // set RX  mode again
                 ELECHOUSE_cc1101.EnterRxMode();
             }
