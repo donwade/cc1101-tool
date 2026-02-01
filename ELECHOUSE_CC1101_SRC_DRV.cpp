@@ -48,7 +48,11 @@ uint32_t irqDeltaTimeGDO0;
 uint32_t irqDeltaTimeGDO2;
 
 
-SPIClass MY_SPI( VSPI);
+#ifdef ARDUINO_M5STACK_CORES3
+  SPIClass MY_SPI( FSPI);
+#else
+  SPIClass MY_SPI( VSPI);
+#endif
 
 /****************************************************************/
 #define   WRITE_BURST       0x40            //write burst
@@ -445,12 +449,14 @@ void ELECHOUSE_CC1101::SpiWriteBurstReg(byte addr, byte *buffer, byte num)
     SpiStart();
     temp = addr | WRITE_BURST;
     digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
     
     MY_SPI.transfer(temp);
 
     for (i = 0; i < num; i++)
         MY_SPI.transfer(buffer[i]);
 
+    digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
     SpiEnd();
 }
@@ -1223,51 +1229,6 @@ float ELECHOUSE_CC1101::getMHZ(void)
 void ELECHOUSE_CC1101::setMHZ(float mhz)
 {
 
-#if OEM_CODE
-    byte freq2 = 0;
-    byte freq1 = 0;
-    byte freq0 = 0;
-
-    gMHz = mhz;
-	mhz += tweakFreqHz/1e6;   // offset 20khz expressed in mhz
-
-	Serial.printf("\ntgt=%f adj=%f\n", gMHz, mhz);
-	
-    for (bool i = 0; i == 0;)
-    {
-        if (mhz >= 26)
-        {
-            mhz -= 26;
-            freq2 += 1;
-        }
-        else if (mhz >= 0.1015625)
-        {
-            mhz -= 0.1015625;
-            freq1 += 1;
-        }
-        else if (mhz >= 0.00039675)
-        {
-            mhz -= 0.00039675;
-            freq0 += 1;
-        }
-        else
-        {
-            i = 1;
-        }
-    }
-
-    if (freq0 > 255)
-    {
-        freq1 += 1; freq0 -= 256;
-    }
-
-    SpiWriteReg(CC1101_FREQ2, freq2);
-    SpiWriteReg(CC1101_FREQ1, freq1);
-    SpiWriteReg(CC1101_FREQ0, freq0);
-
-    //Calibrate();  // messes things up.
-
-#else    
    	uint32_t  temp;
 
 	if (mhz == 0.0 ) mhz = gMHz;
@@ -1301,8 +1262,6 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 
 	Serial.printf("%s error = %d hz\n\n", __FUNCTION__, (int) err);
 #endif
-
-    #endif
 }
 
 
@@ -2669,16 +2628,15 @@ void ELECHOUSE_CC1101::SendBinaryData(byte *txBuffer, byte size)
 {
 	if (gMHz > 866 && gMHz < 868) Serial.printf("***** DANGER TX FREQ = %f\n", gMHz);
 
-    SpiWriteReg(CC1101_TXFIFO, size);
+    _SpiWriteReg("CC1101_TXFIFO", CC1101_TXFIFO, size, true);
 
     SpiWriteBurstReg(CC1101_TXFIFO, txBuffer, size);    //write data to send
 
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_STX);      //start send
 
-	Serial.printf("waiting for GDO0 up\n");
+	// can't get out of here ??? you didn't power up the MBUS dumbass
     while (!digitalRead(GDO0)); // -> sync transmitted
-	Serial.printf("waiting for GDO0 dn\n");
     while ( digitalRead(GDO0)); // -> end of packet
 
     SpiStrobe(CC1101_SFTX);                 //flush TXfifo

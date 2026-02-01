@@ -23,7 +23,9 @@
 //----
 
 
-//#include <M5Unified.h>
+#include <M5Unified.h>
+#include <Wire.h>
+#include "built_on.h"
 
 #define LINE Serial.printf("%s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
 
@@ -36,7 +38,7 @@
 #define EPROMSIZE 512               // Size of EEPROM in your Arduino chip. For ESP32 it is Flash simulated so very slow
 #define BUF_LENGTH 128              // Buffer for the incoming command.
 
-#define DEFAULT_TxFREQ  867.010  //905. //866.9375     //866.8875 	//866.9625   // 905
+#define DEFAULT_TxFREQ  905. //867.010  //905. //866.9375     //866.8875 	//866.9625   // 905
 
 #define DEFAULT_RxFREQ 867.38751
 
@@ -101,9 +103,25 @@ byte bigrecordingbuffer[RECORDINGBUFFERSIZE] = { 0 };
 // buffer for hex to ascii conversions
 char textBuffer[RECORDINGBUFFERSIZE * 2 + 1];
 
+#define RANDO_LENGTH 55
 
 //char hexBuffer[BUF_LENGTH];
 // convert bytes in table to string with hex numbers
+
+uint8_t * makeRandomTxBuffer(uint8_t len)
+{
+	static uint8_t packCtr ;
+	static uint8_t TX_BUFFER[CCBUFFERSIZE];
+	
+	len = min(len, (uint8_t) CCBUFFERSIZE);
+	
+	for (int i= 0; i < len; i++) TX_BUFFER[i] = random(255);
+	
+	TX_BUFFER[0]= len;
+	sprintf( (char *) &TX_BUFFER[1],"%03d:", packCtr++);
+
+	return TX_BUFFER;
+}
 
 void binToAscii(byte *asciiIn, char *hexOut, int len)
 {
@@ -282,6 +300,62 @@ static void cc1101initialize(void)
     										//	as well as CRC OK.
 }
 
+//-----------------------------------------------------------------------
+
+void txSendByFifos(void)
+{
+	byte *rando;  
+
+	ELECHOUSE_cc1101.EnterIdleMode();
+#if 0
+	ELECHOUSE_cc1101.setModulation(3); //4fsk
+	ELECHOUSE_cc1101.setDataRateKhz(4.8);
+	ELECHOUSE_cc1101.setDeviation_FSK2(1.8);
+	ELECHOUSE_cc1101.setNumPreambleBytes (7);  // long preamble
+#else
+	ELECHOUSE_cc1101.setModulation(3); //4fsk
+	ELECHOUSE_cc1101.setDataRateKhz(.3);
+	ELECHOUSE_cc1101.setSymbolSpacingHz(1200);
+	ELECHOUSE_cc1101.setNumPreambleBytes (7);  // long preamble
+#endif
+
+	Serial.println("wait for 5 seconds");
+	delay(5000);
+
+	uint32_t pctr = 0;
+	float freq = ELECHOUSE_cc1101.getMHZ();
+	
+    while(!Serial.available())
+    {
+    	pctr++;
+		if (freq < 800 && pctr > 5) break;
+    	
+    	int j;
+        Serial.printf("\r\nTransmitting RF packet %d\r\n", pctr);
+
+		rando = makeRandomTxBuffer(RANDO_LENGTH);
+		
+    	// send these data to radio over CC1101
+    	ELECHOUSE_cc1101.SendBinaryData(rando, RANDO_LENGTH);
+
+    	delay(5000);
+
+    	char abuf[RANDO_LENGTH * 2 + 1];
+        Serial.print(F("Sent frame: "));
+        for (j = 0; j < RANDO_LENGTH; j++)
+        {
+        	sprintf(&abuf[j*2], "%02X", rando[j]);
+        }
+        abuf[j] = 0;
+        
+        Serial.printf("%f %s\n", freq, abuf);
+		// for DEBUG only
+	}
+
+	ELECHOUSE_cc1101.EnterIdleMode();
+	ELECHOUSE_cc1101.setDataRateKhz(4.8);
+}
+//-----------------------------------------------------------------------
 
 // Execute a complete CC1101 command.
 static void exec(char *input)
@@ -989,57 +1063,8 @@ static void exec(char *input)
     }
     else if (strcmp_P(cmd, PSTR("tx")) == 0)
     {
-    	byte randomBytes[50];  
-    	assert (sizeof(randomBytes) < 60);
+    	txSendByFifos();
  
-        // convert hex array to set of bytes
-        int iCnt = sizeof(randomBytes);
-
-
-		ELECHOUSE_cc1101.EnterIdleMode();
-#if 0
-		ELECHOUSE_cc1101.setModulation(3); //4fsk
-		ELECHOUSE_cc1101.setDataRateKhz(4.8);
-		ELECHOUSE_cc1101.setDeviation_FSK2(1.8);
-		ELECHOUSE_cc1101.setNumPreambleBytes (7);  // long preamble
-#else
-		ELECHOUSE_cc1101.setModulation(3); //4fsk
-		ELECHOUSE_cc1101.setDataRateKhz(.3);
-		ELECHOUSE_cc1101.setSymbolSpacingHz(1200);
-		ELECHOUSE_cc1101.setNumPreambleBytes (7);  // long preamble
-#endif
-
-		Serial.println("wait for 5 seconds");
-		delay(5000);
-		
-        for (int cnt= 0; cnt < 5; cnt++)
-        {
-        	int j;
-	        Serial.printf("\r\nTransmitting RF packet %d of 5.\r\n", cnt);
-
-			for (int i= 0; i < iCnt; i++) randomBytes[i] = random(255);
-        
-        	// send these data to radio over CC1101
-        	ELECHOUSE_cc1101.SendBinaryData(randomBytes, sizeof(randomBytes));
-
-        	delay(1000);
-
-        	char abuf[iCnt * 2 + 1];
-	        Serial.print(F("Sent frame: "));
-	        for (j = 0; j < iCnt; j++)
-	        {
-	        	sprintf(&abuf[j*2], "%02X", randomBytes[j]);
-	        }
-	        abuf[j] = 0;
-	        
-	        Serial.print(abuf);
-	        Serial.print(F("\r\n"));
-			// for DEBUG only
-		}
-    
-		ELECHOUSE_cc1101.EnterIdleMode();
-		ELECHOUSE_cc1101.setDataRateKhz(4.8);
-	
     }
     else if (strcmp_P(cmd, PSTR("cal")) == 0)
     {
@@ -1746,16 +1771,6 @@ static void exec(char *input)
 }
 
 
-// include the library                                                                     
-//#include <_m5Core2-only.h>
-//#include <_viewController.h>
-
-#include <M5Unified.h>
-#include <Wire.h>
-
-#include "built_on.h"
-
-
 void setup()
 {
 	// POWER UP THE BUS !!!!!! spi always has power, the BUS does NOT
@@ -1825,6 +1840,10 @@ void loop()
 	
     // index for serial port characters
     int i = 0;
+
+#ifndef DNS_YELLOW
+	txSendByFifos();
+#endif
 
     /* Process incoming commands. */
     while (Serial.available())
