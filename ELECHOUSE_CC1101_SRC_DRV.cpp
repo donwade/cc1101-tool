@@ -17,6 +17,10 @@
 #include "ELECHOUSE_CC1101_SRC_DRV.h"
 #include <Arduino.h>
 #include "pretty.h"
+#include <ArduinoOTA.h>
+
+extern ArduinoOTAClass ArduinoOTA;
+
 
 #define LINE Serial.printf(">>> %s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
 

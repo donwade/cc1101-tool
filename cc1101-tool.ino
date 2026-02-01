@@ -26,6 +26,15 @@
 #include <M5Unified.h>
 #include <Wire.h>
 #include "built_on.h"
+#include <WiFi.h>
+#include <ESPmDNS.h>
+#include <NetworkUdp.h>
+#include <ArduinoOTA.h>
+
+const char *ssid = MY_SSID;
+const char *password = MY_SSID_PASSWORD;
+
+
 
 #define LINE Serial.printf("%s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
 
@@ -208,7 +217,7 @@ static void cc1101initialize(void)
     										// Value from 0.02 to 1621.83. 
     										//Default is 99.97 kBaud!
     
-    ELECHOUSE_cc1101.setPA(-30);             // Set TxPower. 
+    ELECHOUSE_cc1101.setPA(0);             // Set TxPower. 
     										// The following settings are possible depending on the frequency band.
     										// (-30  -20  -15  -10  -6    0    5    7    10   11   12) 
     										// Default is max!
@@ -327,6 +336,7 @@ void txSendByFifos(void)
 	
     while(!Serial.available())
     {
+    	ArduinoOTA.handle();
     	pctr++;
 		if (freq < 800 && pctr > 5) break;
     	
@@ -1778,6 +1788,100 @@ void setup()
 	// POWER UP THE BUS !!!!!! spi always has power, the BUS does NOT
 
 	M5.begin(); // POWER UP THE BUS !!!!!!
+
+	ArduinoOTA
+	   .onStart([]() {
+		 String type;
+		 if (ArduinoOTA.getCommand() == U_FLASH) {
+		   type = "sketch";
+		 } else {  // U_SPIFFS
+		   type = "filesystem";
+		 }
+	
+		 // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+		 Serial.println("Start updating " + type);
+	   })
+	   .onEnd([]() {
+		 Serial.println("\nEnd");
+	   })
+	   .onProgress([](unsigned int progress, unsigned int total) {
+		 Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+	   })
+	   .onError([](ota_error_t error) {
+		 Serial.printf("Error[%u]: ", error);
+		 if (error == OTA_AUTH_ERROR) {
+		   Serial.println("Auth Failed");
+		 } else if (error == OTA_BEGIN_ERROR) {
+		   Serial.println("Begin Failed");
+		 } else if (error == OTA_CONNECT_ERROR) {
+		   Serial.println("Connect Failed");
+		 } else if (error == OTA_RECEIVE_ERROR) {
+		   Serial.println("Receive Failed");
+		 } else if (error == OTA_END_ERROR) {
+		   Serial.println("End Failed");
+		 }
+	   });
+
+	WiFi.mode(WIFI_STA);
+	WiFi.begin(ssid, password);
+	while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+		Serial.println("Connection Failed! Rebooting...");
+		delay(5000);
+		ESP.restart();
+	}
+
+	// Port defaults to 3232
+	// ArduinoOTA.setPort(3232);
+
+	// Hostname defaults to esp3232-[MAC]
+	ArduinoOTA.setHostname(REMOTE_HOSTNAME);
+
+	// No authentication by default
+	// ArduinoOTA.setPassword("admin");
+
+	// Password can be set with it's md5 value as well
+	// MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
+	// ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
+
+	ArduinoOTA
+	  .onStart([]() {
+		String type;
+		if (ArduinoOTA.getCommand() == U_FLASH) {
+		  type = "sketch";
+		} else {  // U_SPIFFS
+		  type = "filesystem";
+		}
+	
+		// NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+		Serial.println("Start updating " + type);
+	  })
+	  .onEnd([]() {
+		Serial.println("\nEnd");
+	  })
+	  .onProgress([](unsigned int progress, unsigned int total) {
+		Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+	  })
+	  .onError([](ota_error_t error) {
+		Serial.printf("Error[%u]: ", error);
+		if (error == OTA_AUTH_ERROR) {
+		  Serial.println("Auth Failed");
+		} else if (error == OTA_BEGIN_ERROR) {
+		  Serial.println("Begin Failed");
+		} else if (error == OTA_CONNECT_ERROR) {
+		  Serial.println("Connect Failed");
+		} else if (error == OTA_RECEIVE_ERROR) {
+		  Serial.println("Receive Failed");
+		} else if (error == OTA_END_ERROR) {
+		  Serial.println("End Failed");
+		}
+	  });
+
+	ArduinoOTA.begin();
+	
+	 Serial.println("Ready");
+	 Serial.print("IP address: ");
+	 Serial.println(WiFi.localIP());
+
 	
 	// POWER UP THE BUS !!!!!! spi always has power, the BUS does NOT
 	// POWER UP THE BUS !!!!!! spi always has power, the BUS does NOT
@@ -1824,6 +1928,7 @@ void setup()
 
 void loop()
 {
+	ArduinoOTA.handle();
 
 	static bool bFirstTime = true;
 	if (bFirstTime)
