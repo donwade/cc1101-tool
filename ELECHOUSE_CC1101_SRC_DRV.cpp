@@ -58,7 +58,6 @@ SPIClass MY_SPI( VSPI);
 #define   max_modul 6
 
 byte modulation = 2;
-byte frend0;
 byte logical_chan = 0;
 int pa = 12;
 byte last_pa;
@@ -68,34 +67,13 @@ byte MOSI_PIN;
 byte SS_PIN;
 byte GDO0;
 byte GDO2;
-byte SCK_PIN_M[max_modul];
-byte MISO_PIN_M[max_modul];
-byte MOSI_PIN_M[max_modul];
-byte SS_PIN_M[max_modul];
-byte GDO0_M[max_modul];
-byte GDO2_M[max_modul];
-byte gdo_set = 0;
 bool spi = 0;
 eGDIO_MODES ccmode = LEGACY_0;
 eMODEM_STATE trxstate = MODEM_IDLE;
 float gMHz = 905.0;
 float tweakFreqHz =  0; // -( 20743 + 20400 + 4502.+ 1800 - 800); // running high. knock it down.
-byte m4RxBw = 0;
-byte m4DaRa;
-byte m2DCOFF;
-byte m2MODFM;
-byte m2MANCH;
-byte m2SYNCM;
-byte m1FEC;
-byte m1PRE;
-byte m1CHSP;
-byte pc1PQT;
-byte pc1CRC_AF;
-byte pc1APP_ST;
-byte pc1ADRCHK;
-byte pc0WDATA;
+
 byte pc0PktForm;
-byte pc0CRC_EN;
 byte pc0LenConf;
 
 
@@ -2432,182 +2410,6 @@ void ELECHOUSE_CC1101::setDeviation_FSK2(float fdev)
 #endif
 	}
 }
-
-
-/****************************************************************
-* FUNCTION NAME:Split PKTCTRL0
-* FUNCTION     :none
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::Split_PKTCTRL1(void)
-{
-    int calc = SpiReadStatus(7);
-
-    pc1PQT = 0;
-    pc1CRC_AF = 0;
-    pc1APP_ST = 0;
-    pc1ADRCHK = 0;
-
-    for (bool i = 0; i == 0;)
-    {
-        if (calc >= 32)
-        {
-            calc -= 32; pc1PQT += 32;
-        }
-        else if (calc >= 8)
-        {
-            calc -= 8; pc1CRC_AF += 8;
-        }
-        else if (calc >= 4)
-        {
-            calc -= 4; pc1APP_ST += 4;
-        }
-        else
-        {
-            pc1ADRCHK = calc; i = 1;
-        }
-    }
-}
-
-
-/****************************************************************
-* FUNCTION NAME:Split PKTCTRL0
-* FUNCTION     :none
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::Split_PKTCTRL0(void)
-{
-    int calc = SpiReadStatus(8);
-
-    pc0WDATA = 0;
-    pc0PktForm = 0;
-    pc0CRC_EN = 0;
-    pc0LenConf = 0;
-
-    for (bool i = 0; i == 0;)
-    {
-        if (calc >= 64)
-        {
-            calc -= 64; pc0WDATA += 64;
-        }
-        else if (calc >= 16)
-        {
-            calc -= 16; pc0PktForm += 16;
-        }
-        else if (calc >= 4)
-        {
-            calc -= 4; pc0CRC_EN += 4;
-        }
-        else
-        {
-            pc0LenConf = calc; i = 1;
-        }
-    }
-}
-
-
-/****************************************************************
-* FUNCTION NAME:Split MDMCFG1
-* FUNCTION     :none
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::Split_MDMCFG1(void)
-{
-    int calc = SpiReadStatus(19);
-
-    m1FEC = 0;
-    m1PRE = 0;
-    m1CHSP = 0;
-    int s2 = 0;
-
-    for (bool i = 0; i == 0;)
-    {
-        if (calc >= 128)
-        {
-            calc -= 128; m1FEC += 128;
-        }
-        else if (calc >= 16)
-        {
-            calc -= 16; m1PRE += 16;
-        }
-        else
-        {
-            m1CHSP = calc; i = 1;
-        }
-    }
-}
-
-
-/****************************************************************
-* FUNCTION NAME:Split MDMCFG2
-* FUNCTION     :none
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::Split_MDMCFG2(void)
-{
-    int calc = SpiReadStatus(18);
-
-    m2DCOFF = 0;
-    m2MODFM = 0;
-    m2MANCH = 0;
-    m2SYNCM = 0;
-
-    for (bool i = 0; i == 0;)
-    {
-        if (calc >= 128)
-        {
-            calc -= 128; m2DCOFF += 128;
-        }
-        else if (calc >= 16)
-        {
-            calc -= 16; m2MODFM += 16;
-        }
-        else if (calc >= 8)
-        {
-            calc -= 8; m2MANCH += 8;
-        }
-        else
-        {
-            m2SYNCM = calc; i = 1;
-        }
-    }
-}
-
-
-/****************************************************************
-* FUNCTION NAME:Split MDMCFG4
-* FUNCTION     :none
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::Split_MDMCFG4(void)
-{
-    int calc = SpiReadStatus(16);
-
-    m4RxBw = 0;
-    m4DaRa = 0;
-
-    for (bool i = 0; i == 0;)
-    {
-        if (calc >= 64)
-        {
-            calc -= 64; m4RxBw += 64;
-        }
-        else if (calc >= 16)
-        {
-            calc -= 16; m4RxBw += 16;
-        }
-        else
-        {
-            m4DaRa = calc; i = 1;
-        }
-    }
-}
-
 
 /****************************************************************
 * FUNCTION NAME:RegConfigSettings
