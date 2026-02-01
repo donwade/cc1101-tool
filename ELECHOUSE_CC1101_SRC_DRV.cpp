@@ -71,7 +71,7 @@ bool spi = 0;
 eGDIO_MODES ccmode = LEGACY_0;
 eMODEM_STATE trxstate = MODEM_IDLE;
 float gMHz = 905.0;
-float tweakFreqHz =  0; // -( 20743 + 20400 + 4502.+ 1800 - 800); // running high. knock it down.
+float tweakFreqHz =  0;
 
 byte pc0PktForm;
 byte pc0LenConf;
@@ -133,7 +133,8 @@ template <typename T> T regMask( T &final, T newField, uint8_t lhs, uint8_t rhs)
 	
 	final &= ~mask;
 	final |= newField << rhs;
-#if 1
+
+#if 0
 	Serial.printf("\n\tfield %d:%d  oldField=%02X newField=%02X\n",
 					lhs, rhs, oldField, newField);
 	Serial.printf("\tmask     = "); binary(mask); 		Serial.printf(" 0x%02X\n", mask);
@@ -147,6 +148,8 @@ template <typename T> T regMask( T &final, T newField, uint8_t lhs, uint8_t rhs)
 #define SpiWriteReg(name, value) _SpiWriteReg(#name, name, value)
 #define regRMW(name, val, lhs, rhs) _regRMW(#name, name, val, lhs, rhs)
 
+//---------------------------------------------------------------------
+
 void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t bits, uint8_t LHS, uint8_t RHS)
 {
 	uint8_t orig = SpiReadReg(regNum);
@@ -155,12 +158,12 @@ void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t bits
 	{
 		if (mirror[regNum] != orig)
 		{
-			Serial.printf(FG_BRED "\n%s REG ERROR %s [0x%X]\n" _DONE, __FUNCTION__, regName, regNum);
-			Serial.printf("\t expect ");
+			Serial.printf(FG_BRED "\n[0x%X] %s REG ERROR\n" _DONE, __FUNCTION__, regNum, regName);
+			Serial.printf(FG_BRED "\t expect ");
 			binary((uint8_t) mirror[regNum]);
-			Serial.printf("\t found  ");
+			Serial.printf("but found  ");
 			binary(orig);
-			Serial.println();
+			Serial.println(_DONE);
 		}
 		else
 		{
@@ -172,8 +175,9 @@ void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t bits
 	}
 
 	uint8_t temp = orig;
-	Serial.printf("\n[0x%02X] %s\t", regNum, regName ); 
 	uint8_t want = regMask<uint8_t> ( temp, bits, LHS, RHS);
+
+	Serial.printf("\n[0x%02X] %s 0x%02X\n", regNum, regName, want ); 
 	
 	
 	if(orig != want)
@@ -189,6 +193,7 @@ void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t bits
 		if (x == 10) Serial.printf(FG_RED "\n%s FAIL TO WRITE %s want 0x%X found 0x%X\n" _DONE, __FUNCTION__, regName, want, orig);
 	}	
 }	
+//---------------------------------------------------------------------
 
 void bin (unsigned char byte) {
     for (int i = 7; i >= 0; i--) {
@@ -197,6 +202,8 @@ void bin (unsigned char byte) {
     }
     
 }
+
+//---------------------------------------------------------------------
 
 void ELECHOUSE_CC1101::DumpRegs(void)
 {
@@ -1319,7 +1326,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
     {
     	
         int32_t offset =(CC1101_FSCTRL0, map(gMHz, 300, 348, hwTweakHz_300_348Mhz[0], hwTweakHz_300_348Mhz[1]));
-		Serial.printf(FG_GREEN "%s 300->348 a %d hz internal HW offset to %f \n" _DONE, __FUNCTION__, offset, gMHz); 
+		Serial.printf(FG_GREEN "%s 300->348 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
         
         SpiWriteReg(CC1101_FSCTRL0, offset / hzPerStep);
 
@@ -1342,7 +1349,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
     else if (gMHz >= 378 && gMHz <= 464)
     {
         int32_t offset =(CC1101_FSCTRL0, map(gMHz, 378, 464, hwTweakHz_378_464Mhz[0], hwTweakHz_378_464Mhz[1]));
-		Serial.printf(FG_GREEN "%s 378->464 a %d hz internal HW offset to %f \n" _DONE, __FUNCTION__, offset, gMHz); 
+		Serial.printf(FG_GREEN "%s 378->464 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
         
         SpiWriteReg(CC1101_FSCTRL0, offset / hzPerStep);
 
@@ -1366,7 +1373,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
     {
     
 		int32_t offset =(CC1101_FSCTRL0, map(gMHz, 779, 899, hwTweakHz_779_899Mhz[0], hwTweakHz_779_899Mhz[1]));
-		Serial.printf(FG_GREEN "%s 779->899 a %d hz internal HW offset to %f \n" _DONE, __FUNCTION__, offset, gMHz); 
+		Serial.printf(FG_GREEN "%s 779->899 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
 		
 		SpiWriteReg(CC1101_FSCTRL0, offset / hzPerStep);
 	
@@ -1390,7 +1397,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
     {
 
 		int32_t offset =(CC1101_FSCTRL0, map(gMHz, 900, 928, hwTweakHz_900_928Mhz[0], hwTweakHz_900_928Mhz[1]));
-		Serial.printf(FG_GREEN "%s 900->928 a %d hz internal HW offset to %f \n" _DONE, __FUNCTION__, offset, gMHz); 
+		Serial.printf(FG_GREEN "%s 900->928 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
 
 		Serial.printf("note: %d %d\n", offset / hzPerStep,  (uint8_t)( offset / hzPerStep));
 		SpiWriteReg(CC1101_FSCTRL0, (uint8_t)(offset / hzPerStep));
@@ -2283,7 +2290,7 @@ void ELECHOUSE_CC1101::setSymbolSpacingHz(float HzBetweenSymbol)
 	int16_t lockExp = -1;
 	int16_t lockMantissa = -1;
 
-	Serial.printf(FG_MAGENTA "\n%s: setting deviation (max pull left or right) = %5.2f khz\n" _DONE, __FUNCTION__, HzBetweenSymbol);
+	Serial.printf(FG_MAGENTA "\n%s: spacing between symbols = %5.2f hz\n" _DONE, __FUNCTION__, HzBetweenSymbol);
 	HzBetweenSymbol *= 4.0;   // four posts
 	HzBetweenSymbol /= 3.;		// three panels
 	
@@ -2759,9 +2766,7 @@ byte ELECHOUSE_CC1101::CheckReceiveFlag(void)
 
     if (digitalRead(GDO0))                      //receive data
     {
-        while (digitalRead(GDO0))
-            ;
-
+        while (digitalRead(GDO0));
         return 1;
     }
     else                                                        // no data
