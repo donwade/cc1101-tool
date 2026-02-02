@@ -136,7 +136,8 @@ typedef enum {
 class ELECHOUSE_CC1101
 {
 private:
-void _regRMW(const char *name, uint8_t register, uint8_t val, uint8_t LHS, uint8_t RHS);
+void    _setField(const char *name, uint8_t register, uint8_t val, uint8_t LHS, uint8_t RHS);
+uint8_t _getField(const char *regName, uint8_t regNum, uint8_t LHS, uint8_t RHS);
 
 void SpiStart(void);
 void SpiEnd(void);
@@ -158,6 +159,8 @@ void Split_MDMCFG4(void);
 public:
 void DumpRegs(void);
 void Init(void);
+int getPktStatus(void);
+
 byte SpiReadStatus(byte addr);
 void setSpiPin(byte sck, byte miso, byte mosi, byte ss);
 void setGDOx(byte gdo0, byte gdo2);

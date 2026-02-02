@@ -121,7 +121,26 @@ template <typename T> void binary( T input)
 
 
 
-template <typename T> T regMask( T &final, T newField, uint8_t lhs, uint8_t rhs)
+template <typename T> T regMaskRead( T final, uint8_t lhs, uint8_t rhs)
+{
+	T wide = (lhs - rhs) + 1;
+	T mask = 0;
+	T oldField;
+	
+	assert (lhs >= rhs);
+	// make a bunch of ones
+	for (int i = 0; i < wide; i++) 
+	{	
+		mask *= 2;
+		mask |=1;
+	}
+	mask = mask << rhs;
+
+	oldField = (final & mask) >> rhs;
+	return oldField;
+}
+
+template <typename T> T regMaskWrite( T &final, T newField, uint8_t lhs, uint8_t rhs)
 {
 	T original = final;
 	T wide = (lhs - rhs) + 1;
@@ -154,11 +173,25 @@ template <typename T> T regMask( T &final, T newField, uint8_t lhs, uint8_t rhs)
 
 
 #define SpiWriteReg(name, value) _SpiWriteReg(#name, name, value)
-#define regRMW(name, val, lhs, rhs) _regRMW(#name, name, val, lhs, rhs)
+#define setField(name, val, lhs, rhs)	_setField(#name, name, val, lhs, rhs)
+#define getField(name, lhs, rhs) 		_getField(#name, name, lhs, rhs)
 
 //---------------------------------------------------------------------
 
-void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t bits, uint8_t LHS, uint8_t RHS)
+uint8_t ELECHOUSE_CC1101::_getField(const char *regName, uint8_t regNum, uint8_t LHS, uint8_t RHS)
+{
+	uint8_t orig = SpiReadReg(regNum);
+	
+	uint8_t found = regMaskRead<uint8_t> ( orig, LHS, RHS);
+
+	Serial.printf("\n[0x%02X] %s %02d:%02d = 0x%02X\n", regNum, regName, LHS, RHS, found ); 
+
+	return found;	
+}	
+
+//---------------------------------------------------------------------
+
+void ELECHOUSE_CC1101::_setField(const char *regName, uint8_t regNum, uint8_t bits, uint8_t LHS, uint8_t RHS)
 {
 	uint8_t orig = SpiReadReg(regNum);
 	
@@ -166,7 +199,7 @@ void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t bits
 	{
 		if (mirror[regNum] != orig)
 		{
-			Serial.printf(FG_BRED "\n[0x%X] %s REG ERROR\n" _DONE, __FUNCTION__, regNum, regName);
+			Serial.printf(FG_BRED "\n[0x%X] %s REG ERROR\n" _DONE,  regNum, regName);
 			Serial.printf(FG_BRED "\t expect ");
 			binary((uint8_t) mirror[regNum]);
 			Serial.printf("but found  ");
@@ -175,7 +208,7 @@ void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t bits
 		}
 		else
 		{
-			// Serial.printf(FG_BGREEN "\n%s REG PASS %s [0x%X]\n" _DONE, __FUNCTION__, regName, regNum);
+			// Serial.printf(FG_BGREEN "\n[0x%X] %s REG PASS\n" _DONE , regNum, regName);
 			// Serial.print("\t expect = found ");
 			// binary((uint8_t) mirror[regNum]);
 			// Serial.println();
@@ -183,7 +216,7 @@ void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t bits
 	}
 
 	uint8_t temp = orig;
-	uint8_t want = regMask<uint8_t> ( temp, bits, LHS, RHS);
+	uint8_t want = regMaskWrite<uint8_t> ( temp, bits, LHS, RHS);
 
 	Serial.printf("\n[0x%02X] %s 0x%02X\n", regNum, regName, want ); 
 	
@@ -1041,7 +1074,7 @@ void ELECHOUSE_CC1101::setModulation(byte m)
 
 	// common across all selections.
 	Serial.printf(FG_MAGENTA "%s: set PA lo current\n" _DONE, __FUNCTION__);
-	regRMW(CC1101_FREND0, 1, 5, 4);
+	setField(CC1101_FREND0, 1, 5, 4);
 
 	char type[20];
 	
@@ -1063,7 +1096,7 @@ void ELECHOUSE_CC1101::setModulation(byte m)
 
 			//Serial.printf(FG_FRED "\n%s: todo ook p/a levels?\n" _DONE, __FUNCTION__);
 			Serial.printf(FG_MAGENTA "%s: PA power table index = %d\n" _DONE, __FUNCTION__, 1);
-			regRMW(CC1101_FREND0, 1, 2, 0);
+			setField(CC1101_FREND0, 1, 2, 0);
 			break;	// OOK
 
 		case 3: 
@@ -1078,7 +1111,7 @@ void ELECHOUSE_CC1101::setModulation(byte m)
 	}
 
 	Serial.printf(FG_MAGENTA "%s: modulation %s 0x%X\n" _DONE, __FUNCTION__, type, modulation);
-	regRMW(CC1101_MDMCFG2, modulation, 6, 4);
+	setField(CC1101_MDMCFG2, modulation, 6, 4);
 
 
     setPA(pa);
@@ -1485,7 +1518,7 @@ void ELECHOUSE_CC1101::setPQT(byte v)
     SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
 #else
 	Serial.printf(FG_MAGENTA "\n%s: setting preamble quality = %d\n" _DONE, __FUNCTION__, v);
-	regRMW(CC1101_PKTCTRL1,v, 7, 5);
+	setField(CC1101_PKTCTRL1,v, 7, 5);
 #endif
 
 }
@@ -1509,7 +1542,7 @@ void ELECHOUSE_CC1101::setCRC_AF(bool v)
     SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
 #else
 	Serial.printf(FG_MAGENTA "\n%s: auto flush is %s\n" _DONE, __FUNCTION__, v ? "ENABLED":"DISABLED");
-	regRMW(CC1101_PKTCTRL1,v, 3, 3);
+	setField(CC1101_PKTCTRL1,v, 3, 3);
 #endif
 }
 
@@ -1533,7 +1566,7 @@ void ELECHOUSE_CC1101::setAppendStatus(bool v)
     SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
 #else
 	Serial.printf(FG_MAGENTA "\n%s: %s\n" _DONE, __FUNCTION__, v ? "ON":"OFF");
-    regRMW(CC1101_PKTCTRL1, v, 2, 2);
+    setField(CC1101_PKTCTRL1, v, 2, 2);
 #endif
 }
 
@@ -1568,7 +1601,7 @@ void ELECHOUSE_CC1101::setAdrChk(byte v)
 
    Serial.printf(FG_BMAGENTA "\n%s %s\n" _DONE, __FUNCTION__, msg[v]);
    
-   regRMW(CC1101_PKTCTRL1, v, 1, 0);
+   setField(CC1101_PKTCTRL1, v, 1, 0);
 #endif
 
 }
@@ -1591,7 +1624,7 @@ void ELECHOUSE_CC1101::setWhiteData(bool v)
 
     SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
 #else
-	regRMW(CC1101_PKTCTRL0, v, 6,6);
+	setField(CC1101_PKTCTRL0, v, 6,6);
 #endif
 }
 
@@ -1644,7 +1677,7 @@ void ELECHOUSE_CC1101::setPktFormat(byte v)
 	}
 	Serial.print(_DONE);
 	
-	regRMW(CC1101_PKTCTRL0, v , 5, 4);
+	setField(CC1101_PKTCTRL0, v , 5, 4);
 #endif
 }
 
@@ -1667,7 +1700,7 @@ void ELECHOUSE_CC1101::setCrc(bool v)
     SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
 #else
 	Serial.printf(FG_MAGENTA "\n%s is %s\n" _DONE, __FUNCTION__, v ? "ENABLED" : "DISABLED");
-	regRMW(CC1101_PKTCTRL0, v , 2, 2);
+	setField(CC1101_PKTCTRL0, v , 2, 2);
 #endif
 }
 
@@ -1719,7 +1752,7 @@ void ELECHOUSE_CC1101::setLengthConfig(byte v)
 	Serial.print(_DONE);
 	
 	if (v > 3) v = 3;
-	regRMW(CC1101_PKTCTRL0, v, 1, 0);
+	setField(CC1101_PKTCTRL0, v, 1, 0);
 
 #endif
 }
@@ -1811,7 +1844,7 @@ void ELECHOUSE_CC1101::setDcFilterOff(bool v)
 
     SpiWriteReg(CC1101_MDMCFG2, m2DCOFF + m2MODFM + m2MANCH + m2SYNCM);
 #else
-    regRMW(CC1101_MDMCFG2, v, 7, 7);
+    setField(CC1101_MDMCFG2, v, 7, 7);
 #endif
 }
 
@@ -1833,7 +1866,7 @@ void ELECHOUSE_CC1101::setManchester(bool v)
 
     SpiWriteReg(CC1101_MDMCFG2, m2DCOFF + m2MODFM + m2MANCH + m2SYNCM);
 #else
-    regRMW(CC1101_MDMCFG2,v, 3, 3);
+    setField(CC1101_MDMCFG2,v, 3, 3);
 #endif
 
 }
@@ -1872,7 +1905,7 @@ void ELECHOUSE_CC1101::setSyncMode(byte v)
    };
    
    Serial.printf(FG_MAGENTA "\n%s mode = %s\n" _DONE, __FUNCTION__, msg[v]);
-   regRMW(CC1101_MDMCFG2, v , 2, 0);
+   setField(CC1101_MDMCFG2, v , 2, 0);
 #endif
 }
 
@@ -1896,7 +1929,7 @@ void ELECHOUSE_CC1101::setFEC(bool v)
 #else
 	Serial.printf(FG_MAGENTA "\n%s: %s\n" _DONE, __FUNCTION__, v ? "ON":"OFF");
 	
-	regRMW(CC1101_MDMCFG1, v,7,7);
+	setField(CC1101_MDMCFG1, v,7,7);
 #endif
 }
 
@@ -1932,7 +1965,7 @@ void ELECHOUSE_CC1101::setNumPreambleBytes(byte v)
 	};
 	
 	Serial.printf(FG_MAGENTA "\n%s: %s bytes\n" _DONE, __FUNCTION__, msg[v]);
-	regRMW(CC1101_MDMCFG1, v,6 ,4);
+	setField(CC1101_MDMCFG1, v,6 ,4);
 	
 #endif
 }
@@ -2028,8 +2061,8 @@ void ELECHOUSE_CC1101::setChannelSpacing(float channelSpaceF)
 	
 	Serial.printf("\tlock Mant=%d Exp=%d\n" _DONE, lockMantissa, lockExp);
 	
-    regRMW(CC1101_MDMCFG1, lockExp, 1, 0);
-    regRMW(CC1101_MDMCFG0, lockMantissa, 7, 0);
+    setField(CC1101_MDMCFG1, lockExp, 1, 0);
+    setField(CC1101_MDMCFG0, lockMantissa, 7, 0);
 #endif
 
 }
@@ -2108,8 +2141,8 @@ void ELECHOUSE_CC1101::setRxBW(float rxBw)
 
 	Serial.printf("\tlock Mant=%d Exp=%d\n", lockMantissa, lockExp);
 
-	regRMW(CC1101_MDMCFG4, lockExp, 7, 6);
-	regRMW(CC1101_MDMCFG4, lockMantissa, 5, 4);
+	setField(CC1101_MDMCFG4, lockExp, 7, 6);
+	setField(CC1101_MDMCFG4, lockMantissa, 5, 4);
 #endif
 }
 
@@ -2200,8 +2233,8 @@ void ELECHOUSE_CC1101::setDataRateKhz(float dRate)
 	Serial.printf(FG_BGREEN "\t\tlock Mant=%d Exp=%d Result=%f\n" _DONE, 
 			lockMantissa, lockExp, resultHz);
 	
-    regRMW(CC1101_MDMCFG4, lockExp, 3, 0);
-    regRMW(CC1101_MDMCFG3, lockMantissa, 7, 0);
+    setField(CC1101_MDMCFG4, lockExp, 3, 0);
+    setField(CC1101_MDMCFG3, lockMantissa, 7, 0);
 #endif
 
 }
@@ -2275,8 +2308,8 @@ void ELECHOUSE_CC1101::setSymbolSpacingHz(float HzBetweenSymbol)
 			lockMantissa = iMant;
 		}
 	}
-	regRMW(CC1101_DEVIATN, lockMantissa, 2, 0);
-	regRMW(CC1101_DEVIATN, lockExp, 6, 4);
+	setField(CC1101_DEVIATN, lockMantissa, 2, 0);
+	setField(CC1101_DEVIATN, lockExp, 6, 4);
 
 
 	//lockMantissa = 1;
@@ -2361,8 +2394,8 @@ void ELECHOUSE_CC1101::setDeviation_FSK2(float fdev)
 			lockMantissa = iMant;
 		}
 	}
-	regRMW(CC1101_DEVIATN, lockMantissa, 2, 0);
-	regRMW(CC1101_DEVIATN, lockExp, 6, 4);
+	setField(CC1101_DEVIATN, lockMantissa, 2, 0);
+	setField(CC1101_DEVIATN, lockExp, 6, 4);
 
 
 	//lockMantissa = 1;
@@ -2500,6 +2533,41 @@ int ELECHOUSE_CC1101::getRssi(void)
 }
 
 
+
+/****************************************************************
+* FUNCTION NAME:getPktStatus Level
+* INPUT        :none
+* OUTPUT       :none
+****************************************************************/
+uint8_t bCarrierSense;
+uint8_t bSyncNpacket;
+uint8_t bPQTpass;
+uint8_t bCCA;
+uint8_t bGDO2;
+uint8_t bGDO0;
+
+int ELECHOUSE_CC1101::getPktStatus(void)
+{
+	static int16_t last = -1;
+	
+	uint8_t orig= SpiReadReg(CC1101_PKTSTATUS);
+	
+	bCarrierSense 	= regMaskRead <uint8_t> ( orig, 6, 6);
+	bPQTpass 		= regMaskRead <uint8_t> ( orig, 5, 5);
+	bCCA 			= regMaskRead <uint8_t> ( orig, 4, 4);
+	bSyncNpacket 	= regMaskRead <uint8_t> ( orig, 3, 3);
+	bGDO2 			= regMaskRead <uint8_t> ( orig, 2, 2);
+	bGDO0 			= regMaskRead <uint8_t> ( orig, 0, 0);
+
+	if (last != orig)
+	{
+		last = orig;
+		Serial.printf("CS=%d PQT=%d CCA=%d SYNP=%d\n", 
+				bCarrierSense, bPQTpass, bCCA, bSyncNpacket);
+	}
+    return orig;
+}
+
 /****************************************************************
 * FUNCTION NAME:LQI Level
 * FUNCTION     :get Lqi state
@@ -2514,39 +2582,49 @@ byte ELECHOUSE_CC1101::getLqi(void)
     return lqi;
 }
 
+typedef struct PAIR
+{
+    char *left;
+    char *right;
+};
+
 byte ELECHOUSE_CC1101::getState(void)
 {
 	byte status;
-	static const char *msg[] = 
+	static const PAIR msg[] = 
 	{
-		"SLEEP",	"SLEEP",	
-		"IDLE",	 	"IDLE",	
-		"XOFF",	 	"XOFF",	
-		"VCOON",	"MANCAL",	
-		"REGON",	"MANCAL",	
-		"MANCAL",	"MANCAL",	
-		"VCOONFS",	"_WAKEUP",	
-		"REGONFS_",	"WAKEUP",	
-		"STARTCAL",	"CALIBRATE",	
-		"BWBOOST",	"SETTLING",	
-		"FS_LOCK",	"SETTLING",	
-		"IFADCON",	"SETTLING",	
-		"ENDCAL",	"CALIBRATE",	
-		"RX",	 	"RX",	
-		"RX_END",	"RX",	
-		"RX_RST",	"RX",	
-		"TXRX_SWITCH",	 	"TXRX_SETTLING",	
-		"RXFIFO_OVERFLOW",	"RXFIFO_OVERFLOW",	
-		"FSTXON",	 		"FSTXON",	
-		"TX",	 			"TX",	
-		"TX_END",	 		"TX",	
-		"RXTX_SWITCH",	 	"RXTX_SETTLING",	
-		"TXFIFO_UNDERFLOW", "TXFIFO_UNDERFLOW	",
+		{"SLEEP",	"SLEEP"			},
+		{"IDLE",	 	"IDLE"		},
+		{"XOFF",	 	"XOFF"		},
+		{"VCOON",	"MANCAL"		},
+		{"REGON",	"MANCAL"		},
+		{"MANCAL",	"MANCAL"		},
+		{"VCOONFS",	"_WAKEUP"		},
+		{"REGONFS_",	"WAKEUP"	},
+		{"STARTCAL",	"CALIBRATE"	},
+		{"BWBOOST",	"SETTLING"		},
+		{"FS_LOCK",	"SETTLING"		},
+		{"IFADCON",	"SETTLING"		},
+		{"ENDCAL",	"CALIBRATE"		},
+		{"RX",	 	"RX"			},
+		{"RX_END",	"RX"			},
+		{"RX_RST",	"RX"			},
+		{"TXRX_SWITCH",	 	"TXRX_SETTLING"		},
+		{"RXFIFO_OVERFLOW",	"RXFIFO_OVERFLOW"	},
+		{"FSTXON",	 		"FSTXON"			},
+		{"TX",	 			"TX"				},
+		{"TX_END",	 		"TX"				},
+		{"RXTX_SWITCH",	 	"RXTX_SETTLING"		},
+		{"TXFIFO_UNDERFLOW", "TXFIFO_UNDERFLOW"	},
 	};
-	
+    
+    uint8_t elem = sizeof(msg)/ sizeof(msg[0]);
     status = SpiReadStatus(CC1101_MARCSTATE);
-	Serial.printf(FG_GREEN "%s:  %d = %s\n", __FUNCTION__, status, msg[ status *2 + 1]);
-	
+
+    if ( status < elem)
+	Serial.printf(FG_GREEN "%s:  %d = %s\n", __FUNCTION__, status, msg[ status].right);
+	else
+	Serial.printf(FG_GREEN "%s:  unknown %d\n", __FUNCTION__, status);
     
     return status;
 }

@@ -1929,6 +1929,7 @@ void setup()
 void loop()
 {
 	ArduinoOTA.handle();
+	ELECHOUSE_cc1101.getPktStatus();
 
 	static bool bFirstTime = true;
 	if (bFirstTime)
