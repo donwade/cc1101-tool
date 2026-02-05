@@ -154,6 +154,10 @@ template <typename T> T regMaskWrite( T &final, T newField, uint8_t lhs, uint8_t
 		mask *= 2;
 		mask |=1;
 	}
+
+	// must have, some reg fields are signed values, dont smash other fields.
+	newField &= mask; 
+	
 	mask = mask << rhs;
 
 	oldField = (final & mask) >> rhs;
@@ -173,7 +177,7 @@ template <typename T> T regMaskWrite( T &final, T newField, uint8_t lhs, uint8_t
 
 
 #define SpiWriteReg(name, value) _SpiWriteReg(#name, name, value)
-#define setField(name, val, lhs, rhs)	_setField(#name, name, val, lhs, rhs)
+#define setField(name, val, lhs, rhs)	_setField(#name, name, (uint8_t)val, lhs, rhs)
 #define getField(name, lhs, rhs) 		_getField(#name, name, lhs, rhs)
 
 //---------------------------------------------------------------------
@@ -191,7 +195,7 @@ uint8_t ELECHOUSE_CC1101::_getField(const char *regName, uint8_t regNum, uint8_t
 
 //---------------------------------------------------------------------
 
-void ELECHOUSE_CC1101::_setField(const char *regName, uint8_t regNum, uint8_t bits, uint8_t LHS, uint8_t RHS)
+void ELECHOUSE_CC1101::_setField(const char *regName, uint8_t regNum, uint8_t value, uint8_t LHS, uint8_t RHS)
 {
 	uint8_t orig = SpiReadReg(regNum);
 	
@@ -216,7 +220,7 @@ void ELECHOUSE_CC1101::_setField(const char *regName, uint8_t regNum, uint8_t bi
 	}
 
 	uint8_t temp = orig;
-	uint8_t want = regMaskWrite<uint8_t> ( temp, bits, LHS, RHS);
+	uint8_t want = regMaskWrite<uint8_t> ( temp, value, LHS, RHS);
 
 	Serial.printf("\n[0x%02X] %s 0x%02X\n", regNum, regName, want ); 
 	
@@ -459,6 +463,7 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value, boo
 {
     SpiStart();
 
+    assert(addr < 64);
     
 	mirror[addr] = value;
     digitalWrite(SS_PIN, LOW);
@@ -469,7 +474,7 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value, boo
     digitalWrite(SS_PIN, HIGH);
     SpiEnd();
     
-    if (!bQuiet) Serial.printf(FG_WHITE "\n%s [0x%02X] %s = 0x%02X\n" _DONE, __FUNCTION__, addr, name, value);
+    if (!bQuiet) Serial.printf(FG_WHITE "%s [0x%02X] %s = 0x%02X\n" _DONE, __FUNCTION__, addr, name, value);
 }
 
 
@@ -996,7 +1001,7 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
         setPktFormat(0);
         setLengthConfig(1);
 
-        setDataRateKhz(0.097);
+        setBaudRate(DEFAULT_BAUD);
     }
     else if (ccmode == LEGACY_0)
     {
@@ -1011,7 +1016,7 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
         setPktFormat(3);
         setLengthConfig(2);		// infinite
 
-		setDataRateKhz(4.800);
+		setBaudRate(DEFAULT_BAUD);
     }
     else if (ccmode == SYMBOL_TICK)
     {
@@ -1026,7 +1031,7 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
         setPktFormat(3);		//data in on GDO0 data out on GDOx
         setLengthConfig(2);  	// infinite
 
-		setDataRateKhz(4.800);
+		setBaudRate(DEFAULT_BAUD);
 		enableRisingIRQ_GDO2(callme);
 	}
 	else
@@ -1034,7 +1039,7 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
 		
   
 
-    setModulation(modulation);
+    setModulation(3);
 }
 
 
@@ -1315,7 +1320,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
 	//CC1101_TEST0 = no clue. Too obtuse.
 
 	const int32_t hzPerStep = (XTAL_Mhz * 1e6)/(float) (1<<14);
-	Serial.printf(FG_GREEN "%s hz/step = %d\n" _DONE, __FUNCTION__, hzPerStep); 
+	Serial.printf(FG_GREEN "\n%s hz/step = %d\n" _DONE, __FUNCTION__, hzPerStep); 
 	
 	
     if (gMHz >= 300 && gMHz <= 348)
@@ -1506,21 +1511,8 @@ void ELECHOUSE_CC1101::setAddr(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setPQT(byte v)
 {
-#if OEM_CODE
-
-    Split_PKTCTRL1();
-    pc1PQT = 0;
-
-    if (v > 7)
-        v = 7;
-
-    pc1PQT = v * 32;
-    SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
-#else
 	Serial.printf(FG_MAGENTA "\n%s: setting preamble quality = %d\n" _DONE, __FUNCTION__, v);
 	setField(CC1101_PKTCTRL1,v, 7, 5);
-#endif
-
 }
 
 
@@ -1532,18 +1524,8 @@ void ELECHOUSE_CC1101::setPQT(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setCRC_AF(bool v)
 {
-#if OEM_CODE
-    Split_PKTCTRL1();
-    pc1CRC_AF = 0;
-
-    if (v == 1)
-        pc1CRC_AF = 8;
-
-    SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
-#else
 	Serial.printf(FG_MAGENTA "\n%s: auto flush is %s\n" _DONE, __FUNCTION__, v ? "ENABLED":"DISABLED");
 	setField(CC1101_PKTCTRL1,v, 3, 3);
-#endif
 }
 
 
@@ -1555,19 +1537,8 @@ void ELECHOUSE_CC1101::setCRC_AF(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setAppendStatus(bool v)
 {
-
-#if OEM_CODE
-    Split_PKTCTRL1();
-    pc1APP_ST = 0;
-
-    if (v == 1)
-        pc1APP_ST = 4;
-
-    SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
-#else
 	Serial.printf(FG_MAGENTA "\n%s: %s\n" _DONE, __FUNCTION__, v ? "ON":"OFF");
     setField(CC1101_PKTCTRL1, v, 2, 2);
-#endif
 }
 
 
@@ -1579,16 +1550,6 @@ void ELECHOUSE_CC1101::setAppendStatus(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setAdrChk(byte v)
 {
-#if OEM_CODE
-    Split_PKTCTRL1();
-    pc1ADRCHK = 0;
-
-    if (v > 3)
-        v = 3;
-
-    pc1ADRCHK = v;
-    SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
-#else
 	const char *msg[] = 
 	{
 		"(00)No address check",
@@ -1602,7 +1563,6 @@ void ELECHOUSE_CC1101::setAdrChk(byte v)
    Serial.printf(FG_BMAGENTA "\n%s %s\n" _DONE, __FUNCTION__, msg[v]);
    
    setField(CC1101_PKTCTRL1, v, 1, 0);
-#endif
 
 }
 
@@ -1615,17 +1575,7 @@ void ELECHOUSE_CC1101::setAdrChk(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setWhiteData(bool v)
 {
-#if OEM_CODE
-    Split_PKTCTRL0();
-    pc0WDATA = 0;
-
-    if (v == 1)
-        pc0WDATA = 64;
-
-    SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
-#else
 	setField(CC1101_PKTCTRL0, v, 6,6);
-#endif
 }
 
 
@@ -1638,16 +1588,6 @@ void ELECHOUSE_CC1101::setWhiteData(bool v)
 void ELECHOUSE_CC1101::setPktFormat(byte v)
 {
 
-#if OEM_CODE
-    Split_PKTCTRL0();
-    pc0PktForm = 0;
-
-    if (v > 3)
-        v = 3;
-
-    pc0PktForm = v * 16;
-    SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
-#else
    if (v > 3) v = 3;
 
 	Serial.println(FG_BMAGENTA);
@@ -1678,7 +1618,7 @@ void ELECHOUSE_CC1101::setPktFormat(byte v)
 	Serial.print(_DONE);
 	
 	setField(CC1101_PKTCTRL0, v , 5, 4);
-#endif
+	
 }
 
 
@@ -1690,19 +1630,132 @@ void ELECHOUSE_CC1101::setPktFormat(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setCrc(bool v)
 {
-#if OEM_CODE
-    Split_PKTCTRL0();
-    pc0CRC_EN = 0;
-
-    if (v == 1)
-        pc0CRC_EN = 4;
-
-    SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
-#else
 	Serial.printf(FG_MAGENTA "\n%s is %s\n" _DONE, __FUNCTION__, v ? "ENABLED" : "DISABLED");
 	setField(CC1101_PKTCTRL0, v , 2, 2);
-#endif
 }
+
+
+
+void ELECHOUSE_CC1101::setLnaStrategy(bool bType1)
+{
+	bool old = getField(CC1101_AGCCTRL1, 6, 6);
+	Serial.printf(FG_MAGENTA "\n%s WAS %s drops first then %s\n" _DONE, __FUNCTION__, old ? "LNA-1":"LNA-2", old ?"LNA-2":"LNA-1");
+
+	Serial.printf(FG_MAGENTA "%s NOW %s drops first then %s\n" _DONE, __FUNCTION__, old ? "LNA-1":"LNA-2", old ?"LNA-2":"LNA-1");
+
+	setField(CC1101_AGCCTRL1, bType1, 6, 6);
+}
+
+
+void ELECHOUSE_CC1101::setCarrierSenseAbs(int8_t vDb)
+{
+	int8_t oldReg = getField(CC1101_AGCCTRL1, 3, 0);
+
+
+	Serial.printf(FG_MAGENTA "\n%s WAS %d db around MAGN_TARGET\n" _DONE, __FUNCTION__, oldReg);
+	
+	if (vDb > -8 && vDb < 8)
+		Serial.printf(FG_MAGENTA "%s NOW is %d db around MAGN_TARGET\n" _DONE, __FUNCTION__, vDb);
+	else
+	{	
+		vDb = -8;
+		Serial.printf(FG_MAGENTA "%s NOW is DISABLED (db < -7 || db > +7) \n" _DONE, __FUNCTION__);
+	}	
+	setField(CC1101_AGCCTRL1, vDb, 3, 0);
+}
+
+
+void ELECHOUSE_CC1101::setCarrierSenseRel(int8_t vDb)
+{
+	int8_t reg, oldReg;
+	int8_t oldDb, newDb;
+	
+	if (vDb > 13 )
+	{
+		reg = 3;
+		newDb = 14;
+	}
+	else if (vDb> 9)
+	{
+		reg = 2;
+		newDb = 10;
+	}
+	else if (vDb > 5)
+	{
+		reg = 1;
+		newDb = 6;
+	}
+	else 
+	{	
+		reg = 0;
+		newDb = 0;
+	}
+
+
+	
+	oldReg = getField(CC1101_AGCCTRL1, 5, 4);
+	if (!oldReg) 
+		Serial.printf(FG_MAGENTA "\n%s WAS DISABLED\n" _DONE, __FUNCTION__);
+	else
+		Serial.printf(FG_MAGENTA "%s WAS +%s db from RSSI floor\n" _DONE, __FUNCTION__, 
+					!oldReg ? "DISABLED" : oldReg < 2 ? "6" : oldReg < 3 ? "10" : "14");
+
+	
+	Serial.printf(FG_MAGENTA "%s NOW %d+ db from RSSI floor\n" _DONE, __FUNCTION__, newDb);
+
+	setField(CC1101_AGCCTRL1, reg , 5, 4);
+}
+
+uint8_t ELECHOUSE_CC1101::setMAGNTarget(uint8_t vDb)
+{
+	if (vDb > 42) vDb = 42;
+
+	uint8_t v;
+	uint8_t oldv, oldDb;
+	
+	if (vDb < 27) 
+		v = 0;
+	else if (vDb < 30)
+		v = 1;
+	else if (vDb < 33)
+		v = 2;
+	else if (vDb < 36)
+		v = 3;
+	else if (vDb < 38)
+		v = 4;
+	else if (vDb < 40)
+		v = 5;
+	else if (vDb < 42)
+		v = 6;
+	else
+		v = 7;
+
+	oldv = getField(CC1101_AGCCTRL2, 2, 0);
+	if (oldv < 1)
+		oldDb = 24;
+	else if (oldv < 2)
+		oldDb = 27;
+	else if (oldv < 3)
+		oldDb = 30;
+	else if (oldv < 4)
+		oldDb = 33;
+	else if (oldv < 5)
+		oldDb = 36;
+	else if (oldv < 6)
+		oldDb = 38;
+	else if (oldv < 7)
+		oldDb = 40;
+	else 
+		oldDb = 42;
+
+	Serial.printf(FG_MAGENTA "\n%s is set to %d dB (old = %d db)\n" _DONE, __FUNCTION__, vDb, oldDb);
+
+	
+	setField(CC1101_AGCCTRL2, v , 2, 0);
+	return oldDb;
+	
+}
+
 
 
 /****************************************************************
@@ -2153,7 +2206,7 @@ void ELECHOUSE_CC1101::setRxBW(float rxBw)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setDataRateKhz(float dRate)
+void ELECHOUSE_CC1101::setBaudRate(uint32_t bps)
 {
 #if OEM_CODE
     Split_MDMCFG4();
@@ -2199,9 +2252,9 @@ void ELECHOUSE_CC1101::setDataRateKhz(float dRate)
 	int16_t lockExp = -1;
 	int16_t lockMantissa = -1;
 	
-	Serial.printf(FG_MAGENTA "\n%s: setting data rate = %5.2f khz\n" FG_BCYAN, __FUNCTION__, dRate);
+	Serial.printf(FG_MAGENTA "\n%s: setting data rate = %d bps\n" FG_BCYAN, __FUNCTION__, bps);
 	
-	dRate *= 1000.;
+	double dRate = bps;
 	double FIXED = dRate * (double)(1 << 28)/ (double)(XTAL_Mhz * 1.e6 );
 	
 	for (exp = 16; exp > -1; exp--)  // exp reg is 4 bits.
@@ -2435,17 +2488,22 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
     SpiWriteReg(CC1101_MCSM0, 0x18);
     SpiWriteReg(CC1101_FOCCFG, 0x16);
     SpiWriteReg(CC1101_BSCFG, 0x1C);
+    
     SpiWriteReg(CC1101_AGCCTRL2, 0xC7);
     SpiWriteReg(CC1101_AGCCTRL1, 0x00);
     SpiWriteReg(CC1101_AGCCTRL0, 0xB2);
+    
     SpiWriteReg(CC1101_FSCAL3, 0xE9);
     SpiWriteReg(CC1101_FSCAL2, 0x2A);
     SpiWriteReg(CC1101_FSCAL1, 0x00);
     SpiWriteReg(CC1101_FSCAL0, 0x1F);
+
     SpiWriteReg(CC1101_FSTEST, 0x59);
+
     SpiWriteReg(CC1101_TEST2, 0x81);
     SpiWriteReg(CC1101_TEST1, 0x35);
     SpiWriteReg(CC1101_TEST0, 0x09);
+
     SpiWriteReg(CC1101_PKTCTRL1, 0x04);
     SpiWriteReg(CC1101_ADDR, 0x00);
     SpiWriteReg(CC1101_PKTLEN, 0x00);
@@ -2549,6 +2607,11 @@ uint8_t bGDO0;
 int ELECHOUSE_CC1101::getPktStatus(void)
 {
 	static int16_t last = -1;
+	static uint32_t lastTime;
+
+	uint32_t now = millis();
+	uint32_t delta = now - lastTime;
+	lastTime = now;
 	
 	uint8_t orig= SpiReadReg(CC1101_PKTSTATUS);
 	
@@ -2562,11 +2625,77 @@ int ELECHOUSE_CC1101::getPktStatus(void)
 	if (last != orig)
 	{
 		last = orig;
-		Serial.printf("CS=%d PQT=%d CCA=%d SYNP=%d\n", 
-				bCarrierSense, bPQTpass, bCCA, bSyncNpacket);
+		Serial.printf("T=%10d CarrierSense=%d PreambleQuality=%d ClearChannelAssmt=%d SyncOrPakt=%d RSSI=%3d\n", 
+				delta, bCarrierSense, bPQTpass, bCCA, bSyncNpacket, getRssi());
 	}
+
+	static int lastRssi;
+	int rssi = getRssi();
+	if (rssi > lastRssi )
+	{
+		lastRssi = rssi + 10;
+		Serial.printf("T=%10d CarrierSense=%d PreambleQuality=%d ClearChannelAssmt=%d SyncOrPakt=%d RSSI=%3d\n", 
+				delta, bCarrierSense, bPQTpass, bCCA, bSyncNpacket, rssi);
+	}
+
     return orig;
 }
+
+
+void ELECHOUSE_CC1101::setCCAmode(uint8_t type)
+{
+	uint8_t oldCCA = getField(CC1101_MCSM1, 5, 4);
+
+	static const char *lcl[] = {
+		"Always",
+		"If RSSI below threshold",
+		"Unless currently receiving a packet",
+		"If RSSI below threshold unless currently receiving a packet"
+	};
+
+	assert (type < 4);
+	Serial.printf(FG_GREEN "\n%s: OLD [%d] = %s\n", __FUNCTION__, oldCCA, lcl[oldCCA]);
+	Serial.printf("%s: NEW [%d] = %s\n" _DONE, __FUNCTION__, type, lcl[type]);
+
+	setField(CC1101_MCSM1,type,5, 4);
+}
+
+void ELECHOUSE_CC1101::setRxOffMode(uint8_t type)
+{
+	uint8_t oldRx = getField(CC1101_MCSM1, 3, 2);
+
+	static const char *lcl[] = {
+						"IDLE",
+						"FSTXON",
+						"TX",
+						"Stay in RX"
+	};
+
+	assert (type < 4);
+	Serial.printf(FG_GREEN "\n%s: OLD [%d] = %s\n", __FUNCTION__, oldRx, lcl[oldRx]);
+	Serial.printf("%s: NEW [%d] = %s\n" _DONE, __FUNCTION__, type, lcl[type]);
+
+	setField(CC1101_MCSM1,type, 3, 2);
+}
+
+void ELECHOUSE_CC1101::setTxOffMode(uint8_t type)
+{
+	uint8_t oldTx = getField(CC1101_MCSM1, 1, 0);
+
+	static const char *lcl[] = {
+						"IDLE",
+						"FSTXON",
+						"Stay in TX + start preamble",
+						"RX"
+	};
+
+	assert (type < 4);
+	Serial.printf(FG_GREEN "\n%s: OLD [%d] = %s\n", __FUNCTION__, oldTx, lcl[oldTx]);
+	Serial.printf("%s: NEW [%d] = %s\n" _DONE, __FUNCTION__, type, lcl[type]);
+
+	setField(CC1101_MCSM1,type, 1, 0);
+}
+
 
 /****************************************************************
 * FUNCTION NAME:LQI Level

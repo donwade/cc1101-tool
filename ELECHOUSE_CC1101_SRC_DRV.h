@@ -170,6 +170,15 @@ void setCCMode(eGDIO_MODES s);
 void setModulation(byte m);
 void setPA(int p);
 
+void setLnaStrategy(bool bType1);
+void setCarrierSenseAbs(int8_t vDb);
+void setCarrierSenseRel(int8_t vDb);
+uint8_t setMAGNTarget(uint8_t vDb);
+void setCCAmode(uint8_t type);
+void setRxOffMode(uint8_t type);
+void setTxOffMode(uint8_t type);
+
+
 void setMHZ(float mhz = 0.0);
 
 float getMHZ(void);
@@ -193,7 +202,7 @@ float setOSCdrift(float hz);
 void setLogicalChanNum(byte chnl);
 void setChannelSpacing(float f);
 void setRxBW(float f);
-void setDataRateKhz(float d);
+void setBaudRate(uint32_t d);
 void setDeviation_FSK2(float d);
 void setSymbolSpacingHz(float d);
 void EnterTxMode(void);
@@ -248,8 +257,7 @@ private:
     int irqDirGDO0;
     int irqDirGDO2;
     
-
-};
+ };
 
 extern uint32_t irqUpCtrGDO0;
 extern uint32_t irqDnCtrGDO0;
@@ -265,6 +273,7 @@ extern SemaphoreHandle_t sem_GDO2_DN ;
 
 
 extern ELECHOUSE_CC1101 ELECHOUSE_cc1101;
+#define DEFAULT_BAUD 300
 
 #define LINE Serial.printf(">>>  %s:%d \n", __FUNCTION__,__LINE__);
  

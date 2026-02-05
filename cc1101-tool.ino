@@ -47,7 +47,7 @@ const char *password = MY_SSID_PASSWORD;
 #define EPROMSIZE 512               // Size of EEPROM in your Arduino chip. For ESP32 it is Flash simulated so very slow
 #define BUF_LENGTH 128              // Buffer for the incoming command.
 
-#define DEFAULT_TxFREQ  905. //867.010  //905. //866.9375     //866.8875 	//866.9625   // 905
+#define DEFAULT_TxFREQ  905.  //867.010  //905. //866.9375     //866.8875 	//866.9625   // 905
 
 #define DEFAULT_RxFREQ 867.38751
 
@@ -210,19 +210,20 @@ static void cc1101initialize(void)
     
     ELECHOUSE_cc1101.setLogicalChanNum(0);         	// Set the Channelnumber from 0 to 255. Default is cahnnel 0.
 
-    ELECHOUSE_cc1101.setChannelSpacing(199.95);       // The channel spacing is multiplied by the channel number CHAN and added to the base frequency in kHz. Value from 25.39 to 405.45. Default is 199.95 kHz.
+    ELECHOUSE_cc1101.setChannelSpacing(25.39);    // The channel spacing is multiplied by the channel number CHAN and added to the base frequency in kHz. Value from 25.39 to 405.45. Default is 199.95 kHz.
     ELECHOUSE_cc1101.setRxBW(58.3);       	// Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
     
-    ELECHOUSE_cc1101.setDataRateKhz(4.8);   // Set the Data Rate in kBaud. 
-    										// Value from 0.02 to 1621.83. 
-    										//Default is 99.97 kBaud!
+    ELECHOUSE_cc1101.setBaudRate(DEFAULT_BAUD);   // Set the Data Rate in Baud. 
+    										// Value from 200 to 1,621,830. 
+    										//Default is 99970 Baud!
     
     ELECHOUSE_cc1101.setPA(0);             // Set TxPower. 
     										// The following settings are possible depending on the frequency band.
     										// (-30  -20  -15  -10  -6    0    5    7    10   11   12) 
     										// Default is max!
 
-    ELECHOUSE_cc1101.setSyncMode(2);        // Combined sync-word qualifier mode. 
+	// RSSI locks if sync is found
+    ELECHOUSE_cc1101.setSyncMode(0);        // Combined sync-word qualifier mode. 
 											// 0 = No preamble/sync. 
 											// 1 = 16 sync word bits detected. 
 											// 2 = 16/16 sync word bits detected. 
@@ -296,7 +297,7 @@ static void cc1101initialize(void)
     										//				6 : 16, 
     										//				7 : 24
     										
-    ELECHOUSE_cc1101.setPQT(0);             // Preamble quality estimator threshold. 
+    ELECHOUSE_cc1101.setPQT(1);             // Preamble quality estimator threshold. 
     										// 		The preamble quality estimator increases an internal counter
     										//			by one each time a bit is received that is different from the previous bit, 
     										//			and decreases the counter by 8 each time a bit 
@@ -304,9 +305,23 @@ static void cc1101initialize(void)
     										// A threshold of PQT for this counter is used to gate sync word detection. 
     										// When PQT=0 a sync word is always accepted.
     										
-    ELECHOUSE_cc1101.setAppendStatus(0);    // When enabled, two status bytes will be appended to the payload of the packet. 
+    ELECHOUSE_cc1101.setAppendStatus(1);    // When enabled, two status bytes will be appended to the payload of the packet. 
     										// 	The status bytes contain RSSI and LQI values,
     										//	as well as CRC OK.
+
+    										
+											
+	ELECHOUSE_cc1101.setLnaStrategy(1);
+	ELECHOUSE_cc1101.setCarrierSenseAbs(99);  // disabled (>7)
+	ELECHOUSE_cc1101.setCarrierSenseRel(9);
+	ELECHOUSE_cc1101.setMAGNTarget(33);
+	
+	ELECHOUSE_cc1101.setCCAmode(0);
+	ELECHOUSE_cc1101.setRxOffMode(3);
+	ELECHOUSE_cc1101.setTxOffMode(0);
+	
+	Serial.println("==================================================");
+	
 }
 
 //-----------------------------------------------------------------------
@@ -318,14 +333,15 @@ void txSendByFifos(void)
 	ELECHOUSE_cc1101.EnterIdleMode();
 #if 0
 	ELECHOUSE_cc1101.setModulation(3); //4fsk
-	ELECHOUSE_cc1101.setDataRateKhz(4.8);
+	ELECHOUSE_cc1101.setBaudRate(4.8);
 	ELECHOUSE_cc1101.setDeviation_FSK2(1.8);
 	ELECHOUSE_cc1101.setNumPreambleBytes (7);  // long preamble
 #else
-	ELECHOUSE_cc1101.setModulation(3); //4fsk
-	ELECHOUSE_cc1101.setDataRateKhz(.3);
+	ELECHOUSE_cc1101.setMHZ(0); 				// refresh tx freq
+	ELECHOUSE_cc1101.setModulation(3); 			//4fsk
+	ELECHOUSE_cc1101.setBaudRate(DEFAULT_BAUD);
 	ELECHOUSE_cc1101.setSymbolSpacingHz(1200);
-	ELECHOUSE_cc1101.setNumPreambleBytes (7);  // long preamble
+	ELECHOUSE_cc1101.setNumPreambleBytes (7);  	// long preamble
 #endif
 
 	Serial.println("wait for 5 seconds");
@@ -348,7 +364,7 @@ void txSendByFifos(void)
     	// send these data to radio over CC1101
     	ELECHOUSE_cc1101.SendBinaryData(rando, RANDO_LENGTH);
 
-    	delay(5000);
+    	delay(12000);
 
     	char abuf[RANDO_LENGTH * 2 + 1];
         Serial.print(F("Sent frame: "));
@@ -363,7 +379,7 @@ void txSendByFifos(void)
 	}
 
 	ELECHOUSE_cc1101.EnterIdleMode();
-	ELECHOUSE_cc1101.setDataRateKhz(4.8);
+	ELECHOUSE_cc1101.setBaudRate(DEFAULT_BAUD);
 }
 //-----------------------------------------------------------------------
 
@@ -552,7 +568,7 @@ static void exec(char *input)
     else if (strcmp_P(cmd, PSTR("setdrate")) == 0)
     {
         nextParam = atof(cmd_args);
-        ELECHOUSE_cc1101.setDataRateKhz(nextParam);
+        ELECHOUSE_cc1101.setBaudRate(nextParam);
         Serial.print(F("\r\nDatarate: "));
         Serial.print(nextParam);
         Serial.print(F(" kbaud\r\n"));
@@ -1082,21 +1098,25 @@ static void exec(char *input)
 
         // convert hex array to set of bytes
         int iCnt = sizeof(binaryArray);
+        
+		ELECHOUSE_cc1101.setCCMode(LEGACY_0);
 
 		ELECHOUSE_cc1101.EnterIdleMode();
 		
 		ELECHOUSE_cc1101.setCCMode(LEGACY_1);  //gdO = SYNC+Sent
 		ELECHOUSE_cc1101.setModulation(2); //ook
-		ELECHOUSE_cc1101.setDataRateKhz(.3);
+		ELECHOUSE_cc1101.setBaudRate(300);
 		ELECHOUSE_cc1101.setMHZ();
+		ELECHOUSE_cc1101.setPA(-30);
 		
 		Serial.println("wait for 5 seconds");
 		delay(5000);
 		
-        for (int cnt= 0; cnt < 3; cnt++)
+        for (int cnt= 0; cnt < 10;  cnt++)
         {
-	        Serial.printf("\r\nTransmitting RF packet %d of 3.\r\n", cnt);
-
+	        Serial.printf("\r\nTransmitting RF packet %d of 10\r\n", cnt);
+			if (Serial.available()) break;
+			
 			for (int i= 0; i < iCnt; i++) binaryArray[i] = random(255);
 
         	// send these data to radio over CC1101
@@ -1104,7 +1124,7 @@ static void exec(char *input)
 
 			ELECHOUSE_cc1101.SendBinaryData(binaryArray, iCnt);
 
-        	delay(200);
+        	delay(1000);
         	char temp[iCnt * 2 + 1];
         	
 	        binToAscii(binaryArray, temp, iCnt);
@@ -1117,7 +1137,8 @@ static void exec(char *input)
 		
 		ELECHOUSE_cc1101.EnterIdleMode();
 		ELECHOUSE_cc1101.setModulation(3); //4fsk
-		ELECHOUSE_cc1101.setDataRateKhz(4.8);
+		ELECHOUSE_cc1101.setBaudRate(DEFAULT_BAUD);
+		ELECHOUSE_cc1101.setPA(0);
     
     }
 
