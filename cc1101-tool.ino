@@ -30,6 +30,7 @@
 #include <ESPmDNS.h>
 #include <NetworkUdp.h>
 #include <ArduinoOTA.h>
+#include "esp_intr_types.h"
 
 const char *ssid = MY_SSID;
 const char *password = MY_SSID_PASSWORD;
@@ -42,7 +43,6 @@ const char *password = MY_SSID_PASSWORD;
 #include <EEPROM.h>
 #include <SPI.h>
 
-#define CCBUFFERSIZE 64
 #define RECORDINGBUFFERSIZE 4096    // Buffer for recording the frames
 #define EPROMSIZE 512               // Size of EEPROM in your Arduino chip. For ESP32 it is Flash simulated so very slow
 #define BUF_LENGTH 128              // Buffer for the incoming command.
@@ -100,10 +100,10 @@ int chatmode = 0;
 static bool do_echo = true;
 
 // buffer for receiving  CC1101
-byte ccreceivingbuffer[CCBUFFERSIZE] = { 0 };
+byte ccreceivingbuffer[CC_FIFOSIZE] = { 0 };
 
 // buffer for sending  CC1101
-byte ccsendingbuffer[CCBUFFERSIZE * 2] = { 0 };
+byte ccsendingbuffer[CC_FIFOSIZE * 2] = { 0 };
 //char ccsendingbuffer[CCBUFFERSIZE] = {0};
 
 // buffer for recording and replaying of many frames
@@ -120,9 +120,9 @@ char textBuffer[RECORDINGBUFFERSIZE * 2 + 1];
 uint8_t * makeRandomTxBuffer(uint8_t len)
 {
 	static uint8_t packCtr ;
-	static uint8_t TX_BUFFER[CCBUFFERSIZE];
+	static uint8_t TX_BUFFER[CC_FIFOSIZE];
 	
-	len = min(len, (uint8_t) CCBUFFERSIZE);
+	len = min(len, (uint8_t) CC_FIFOSIZE);
 	
 	for (int i= 0; i < len; i++) TX_BUFFER[i] = random(255);
 	
@@ -196,9 +196,9 @@ static void cc1101initialize(void)
     // Main part to tune CC1101 with proper frequency, modulation and encoding
     ELECHOUSE_cc1101.Init();                // must be set to initialize the cc1101!
     ELECHOUSE_cc1101.defineGDO0_pinNum(PIN_GDO0);         // set lib internal gdo pin (gdo0). Gdo2 not use for this example.
-    ELECHOUSE_cc1101.setCCMode(LEGACY_1);          // set config for internal transmission mode. value 0 is for RAW recording/replaying
+    ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);          // set config for internal transmission mode. value 0 is for RAW recording/replaying
 
-    ELECHOUSE_cc1101.setModulation(3);      	// set modulation mode. 
+    ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION);      	// set modulation mode. 
     											//	0 = 2-FSK, 
     											//	1 = GFSK, 
     											//	2 = ASK/OOK, 
@@ -248,24 +248,26 @@ static void cc1101initialize(void)
     											// 0 = Whitening off. 
     											// 1 = Whitening on.
     											
-    ELECHOUSE_cc1101.setPktFormat(0);       // Format of RX and TX data. 
-    											// 0 = Normal mode, use FIFOs for RX and TX. 
-    											// 1 = Synchronous serial mode, 
-    											//			Data in on GDO0 and data out on either of the GDOx pins. 
-    											// 2 = Random TX mode; sends random data using PN9 generator. 
-    											//		Used for test. Works as normal mode, setting 0 (00), 
-    											//		in RX. 3 = Asynchronous serial mode, 
-    											//		Data in on GDO0 and data out on either of the GDOx pins.
+    ELECHOUSE_cc1101.setPktFormat(0);   // Format of RX and TX data. 
+										// 0 = Normal mode, use FIFOs for RX and TX. 
+										// 1 = Synchronous serial mode, 
+										//			Data in on GDO0 and data out on either of the GDOx pins. 
+										// 2 = Random TX mode; sends random data using PN9 generator. 
+										//		Used for test. Works as normal mode, setting 0 (00), 
+										//		in RX. 3 = Asynchronous serial mode, 
+										//		Data in on GDO0 and data out on either of the GDOx pins.
     											
+	ELECHOUSE_cc1101.setPacketLength(CC_FIFOSIZE);
+												// If FIXED packet length mode is enabled. 
+												// If VARIABLE packet this value indicates the maximum packet length allowed.
+												// If INFINITE packet format may allow this to be zero
+	
+	
     ELECHOUSE_cc1101.setLengthConfig(1);    //  0 = Fixed packet length mode. 
     										//	1 = Variable packet length mode. 
     										//	2 = Infinite packet length mode. 
     										//  3 = Reserved
     										
-    ELECHOUSE_cc1101.setPacketLength(0);    // Indicates the packet length when fixed packet length mode is enabled. 
-    										// If variable packet length mode is used, 
-    										//		this value indicates the maximum packet length allowed.
-
     ELECHOUSE_cc1101.setCrc(0);             // 1 = CRC calculation in TX and CRC check in RX enabled. 
     										// 0 = CRC disabled for TX and RX.
     										
@@ -332,29 +334,31 @@ void txSendByFifos(void)
 
 	ELECHOUSE_cc1101.EnterIdleMode();
 #if 0
-	ELECHOUSE_cc1101.setModulation(3); //4fsk
+	ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); //4fsk
 	ELECHOUSE_cc1101.setBaudRate(4.8);
 	ELECHOUSE_cc1101.setDeviation_FSK2(1.8);
 	ELECHOUSE_cc1101.setNumPreambleBytes (7);  // long preamble
 #else
 	ELECHOUSE_cc1101.setMHZ(0); 				// refresh tx freq
-	ELECHOUSE_cc1101.setModulation(3); 			//4fsk
+	ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); 			//4fsk
 	ELECHOUSE_cc1101.setBaudRate(DEFAULT_BAUD);
 	ELECHOUSE_cc1101.setSymbolSpacingHz(1200);
 	ELECHOUSE_cc1101.setNumPreambleBytes (7);  	// long preamble
 #endif
 
-	Serial.println("wait for 5 seconds");
-	delay(5000);
+	ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);	//gdO = SYNC+Sent
+
+	delay(1000);
 
 	uint32_t pctr = 0;
 	float freq = ELECHOUSE_cc1101.getMHZ();
+
 	
     while(!Serial.available())
     {
     	ArduinoOTA.handle();
     	pctr++;
-		if (freq < 800 && pctr > 5) break;
+		if (freq < 800 || pctr > 1) break;    /////////////////////////
     	
     	int j;
         Serial.printf("\r\nTransmitting RF packet %d\r\n", pctr);
@@ -364,7 +368,6 @@ void txSendByFifos(void)
     	// send these data to radio over CC1101
     	ELECHOUSE_cc1101.SendBinaryData(rando, RANDO_LENGTH);
 
-    	delay(12000);
 
     	char abuf[RANDO_LENGTH * 2 + 1];
         Serial.print(F("Sent frame: "));
@@ -375,8 +378,17 @@ void txSendByFifos(void)
         abuf[j] = 0;
         
         Serial.printf("%f %s\n", freq, abuf);
+
+		int waitSec = 12;
+    	while(waitSec--)
+    	{
+			if(Serial.available()) goto bye; 
+    		delay(1000);
+        }
 		// for DEBUG only
 	}
+bye:
+	Serial.read();
 
 	ELECHOUSE_cc1101.EnterIdleMode();
 	ELECHOUSE_cc1101.setBaudRate(DEFAULT_BAUD);
@@ -930,7 +942,8 @@ static void exec(char *input)
                }
             }
         }
-
+		Serial.read();
+		
         // handling SAVE command
     }
     else if (strcmp_P(cmd, PSTR("save")) == 0)
@@ -1046,7 +1059,7 @@ static void exec(char *input)
         {
             // setup async mode on CC1101 and go into TX mode
             // with GDO0 pin processing
-            ELECHOUSE_cc1101.setCCMode(LEGACY_0);
+            ELECHOUSE_cc1101.setCCMode(I_DUNNO);
             ELECHOUSE_cc1101.setPktFormat(3);
             ELECHOUSE_cc1101.EnterTxMode();
             
@@ -1068,14 +1081,17 @@ static void exec(char *input)
 
                 // checking if key pressed
                 if (Serial.available())
+                {
+                	Serial.read();
                     break;
+                }
             }
 
             ;
             Serial.print(F("\r\nBrute forcing complete.\r\n"));
 
             // setting normal pkt format again
-            ELECHOUSE_cc1101.setCCMode(LEGACY_1);
+            ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);
             ELECHOUSE_cc1101.setPktFormat(0);
             ELECHOUSE_cc1101.EnterTxMode();
             ELECHOUSE_cc1101.setGDO0_hostpinMode(INPUT);
@@ -1090,7 +1106,6 @@ static void exec(char *input)
     else if (strcmp_P(cmd, PSTR("tx")) == 0)
     {
     	txSendByFifos();
- 
     }
     else if (strcmp_P(cmd, PSTR("cal")) == 0)
     {
@@ -1099,11 +1114,11 @@ static void exec(char *input)
         // convert hex array to set of bytes
         int iCnt = sizeof(binaryArray);
         
-		ELECHOUSE_cc1101.setCCMode(LEGACY_0);
+		/////ELECHOUSE_cc1101.setCCMode(I_DUNNO);
 
 		ELECHOUSE_cc1101.EnterIdleMode();
 		
-		ELECHOUSE_cc1101.setCCMode(LEGACY_1);  //gdO = SYNC+Sent
+		ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);  //gdO = SYNC+Sent
 		ELECHOUSE_cc1101.setModulation(2); //ook
 		ELECHOUSE_cc1101.setBaudRate(300);
 		ELECHOUSE_cc1101.setMHZ();
@@ -1112,10 +1127,14 @@ static void exec(char *input)
 		Serial.println("wait for 5 seconds");
 		delay(5000);
 		
-        for (int cnt= 0; cnt < 10;  cnt++)
+        for (int cnt= 0; cnt < 1;  cnt++)  //////////////////// 5
         {
 	        Serial.printf("\r\nTransmitting RF packet %d of 10\r\n", cnt);
-			if (Serial.available()) break;
+			if (Serial.available())
+			{
+				Serial.read();
+				break;
+			}
 			
 			for (int i= 0; i < iCnt; i++) binaryArray[i] = random(255);
 
@@ -1124,7 +1143,7 @@ static void exec(char *input)
 
 			ELECHOUSE_cc1101.SendBinaryData(binaryArray, iCnt);
 
-        	delay(1000);
+        	delay(500);
         	char temp[iCnt * 2 + 1];
         	
 	        binToAscii(binaryArray, temp, iCnt);
@@ -1136,7 +1155,7 @@ static void exec(char *input)
 		}
 		
 		ELECHOUSE_cc1101.EnterIdleMode();
-		ELECHOUSE_cc1101.setModulation(3); //4fsk
+		ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); //4fsk
 		ELECHOUSE_cc1101.setBaudRate(DEFAULT_BAUD);
 		ELECHOUSE_cc1101.setPA(0);
     
@@ -1153,7 +1172,7 @@ static void exec(char *input)
         if (setting > 0)
         {
             // setup async mode on CC1101 with GDO0 pin processing
-            ELECHOUSE_cc1101.setCCMode(LEGACY_0);
+            ELECHOUSE_cc1101.setCCMode(I_DUNNO);
             ELECHOUSE_cc1101.setPktFormat(3);
             ELECHOUSE_cc1101.EnterRxMode();
 
@@ -1167,7 +1186,6 @@ static void exec(char *input)
             delayMicroseconds(1000);
 
             // waiting for some data first or serial port signal
-            //while (!Serial.available() ||  (digitalRead(gdo0) == LOW) );
             while (digitalRead(PIN_GDO0) == LOW);
 
             //start recording to the buffer with bitbanging of GDO0 pin state
@@ -1196,7 +1214,7 @@ static void exec(char *input)
 
             
             // setting normal pkt format again
-            ELECHOUSE_cc1101.setCCMode(LEGACY_1);
+            ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);
             ELECHOUSE_cc1101.setPktFormat(0);
             ELECHOUSE_cc1101.EnterRxMode();
         }
@@ -1218,9 +1236,9 @@ static void exec(char *input)
         if (setting > 0)
         {
             // setup async mode on CC1101 with GDO0 pin processing
-            ELECHOUSE_cc1101.setCCMode(LEGACY_0);
+            ELECHOUSE_cc1101.setCCMode(I_DUNNO);
             ELECHOUSE_cc1101.setPktFormat(3);
-            ELECHOUSE_cc1101.setModulation(3); //fsk-4
+            ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); //fsk-4
             ELECHOUSE_cc1101.EnterRxMode();
             
             //start recording to the buffer with bitbanging of GDO0 pin state
@@ -1247,8 +1265,6 @@ static void exec(char *input)
                     bigrecordingbuffer[i] = receivedbyte;
                 }
 
-                ;
-
                 // when buffer full print the ouptput to serial port
                 for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
                 {
@@ -1258,11 +1274,12 @@ static void exec(char *input)
 
 
             }; // end of While loop
-
+			Serial.read();
+			
             Serial.printf("\nStopping the sniffer. up=%d dn=%d \n", irqUpCtrGDO0, irqDnCtrGDO0);
             
             // setting normal pkt format again
-            ELECHOUSE_cc1101.setCCMode(LEGACY_1);
+            ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);
             ELECHOUSE_cc1101.setPktFormat(0);
             ELECHOUSE_cc1101.EnterRxMode();
         }
@@ -1282,7 +1299,7 @@ static void exec(char *input)
         {
             // setup async mode on CC1101 with GDO0 pin processing
             ELECHOUSE_cc1101.setCCMode(SYMBOL_TICK);
-            ELECHOUSE_cc1101.setModulation(3); //fsk-4
+            ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); //fsk-4
             ELECHOUSE_cc1101.EnterRxMode();
             
             //start recording to the buffer with bitbanging of GDO0 pin state
@@ -1338,7 +1355,8 @@ static void exec(char *input)
 
 #endif
             }; // end of While loop
-
+			Serial.read();
+			
             uint32_t deltaT = micros() - start;
 
             Serial.printf("\nStopping the new sniffer. up=%d dn=%d \n", irqUpCtrGDO2, irqDnCtrGDO2);
@@ -1348,7 +1366,7 @@ static void exec(char *input)
 
 
             // setting normal pkt format again
-            ELECHOUSE_cc1101.setCCMode(LEGACY_1);
+            ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);
             ELECHOUSE_cc1101.setPktFormat(0);
             ELECHOUSE_cc1101.EnterRxMode();
         }
@@ -1371,7 +1389,7 @@ static void exec(char *input)
         {
             // setup async mode on CC1101 and go into TX mode
             // with GDO0 pin processing
-            ELECHOUSE_cc1101.setCCMode(LEGACY_0);
+            ELECHOUSE_cc1101.setCCMode(I_DUNNO);
             ELECHOUSE_cc1101.setPktFormat(3);
             ELECHOUSE_cc1101.EnterTxMode();
 
@@ -1393,7 +1411,7 @@ static void exec(char *input)
 
             Serial.print(F("\r\nReplaying RAW data complete.\r\n"));
             // setting normal pkt format again
-            ELECHOUSE_cc1101.setCCMode(LEGACY_1);
+            ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);
             ELECHOUSE_cc1101.setPktFormat(0);
             ELECHOUSE_cc1101.EnterTxMode();
             ELECHOUSE_cc1101.setGDO0_hostpinMode(INPUT);
@@ -1908,9 +1926,9 @@ void setup()
 	// POWER UP THE BUS !!!!!! spi always has power, the BUS does NOT
 	// POWER UP THE BUS !!!!!! spi always has power, the BUS does NOT
 	
-#if defined (ARDUINO_M5STACK_CORES3)
-    pinMode(19, INPUT);     // S3 bug. Jtag messes up Usb serial
-#endif
+//#if defined (ARDUINO_M5STACK_CORES3)
+//    pinMode(19, INPUT);     // S3 bug. Jtag messes up Usb serial
+//#endif
 
     // initialize USB Serial Port CDC
     Serial.begin(115200);
@@ -1944,6 +1962,8 @@ void setup()
 
     // setup variables
     bigrecordingbufferpos = 0;
+
+    esp_intr_dump(stdout);
 }
 
 
@@ -1963,14 +1983,16 @@ void loop()
 		}
 		Serial.println("ready");
 		bFirstTime = false;
+
+#ifndef DNS_YELLOW
+		txSendByFifos();
+#endif
+	
+
 	}
 	
     // index for serial port characters
     int i = 0;
-
-#ifndef DNS_YELLOW
-	txSendByFifos();
-#endif
 
     /* Process incoming commands. */
     while (Serial.available())
@@ -1986,7 +2008,7 @@ void loop()
             i = 0;
 
             // something was received over serial port put it into radio sending buffer
-            while (Serial.available() and(i < (CCBUFFERSIZE - 1)))
+            while (Serial.available() and(i < (CC_FIFOSIZE - 1)))
             {
                 // read single character from Serial port
                 ccsendingbuffer[i] = Serial.read();
@@ -2057,13 +2079,10 @@ void loop()
             }
         }
 
-        ;
-        // end of handling CLI processing
+         // end of handling CLI processing
 
     }
-
-    ;
-
+  
     /* Process RF received packets */
 
     //Checks whether something has been received.
@@ -2077,7 +2096,7 @@ void loop()
             int len = ELECHOUSE_cc1101.ReceiveData(ccreceivingbuffer);
 
             // Actions for CHAT MODE
-            if ((chatmode == 1) && (len < CCBUFFERSIZE))
+            if ((chatmode == 1) && (len < CC_FIFOSIZE))
             {
                 // put NULL at the end of char buffer
                 ccreceivingbuffer[len] = '\0';
@@ -2088,7 +2107,7 @@ void loop()
             ;      // end of handling Chat mode
 
             // Actions for RECEIVNG MODE
-            if (((receivingmode == 1) && (recordingmode == 0)) && (len < CCBUFFERSIZE))
+            if (((receivingmode == 1) && (recordingmode == 0)) && (len < CC_FIFOSIZE))
             {
                 // put NULL at the end of char buffer
                 ccreceivingbuffer[len] = '\0';
@@ -2111,7 +2130,7 @@ void loop()
             ;        // end of handling receiving mode
 
             // Actions for RECORDING MODE
-            if (((recordingmode == 1) && (receivingmode == 0)) && (len < CCBUFFERSIZE))
+            if (((recordingmode == 1) && (receivingmode == 0)) && (len < CC_FIFOSIZE))
             {
                 // copy the frame from receiving buffer for replay - only if it fits
                 if ((bigrecordingbufferpos + len + 1) < RECORDINGBUFFERSIZE)

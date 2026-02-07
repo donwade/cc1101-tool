@@ -21,8 +21,9 @@
 
 typedef enum 
 {
-    LEGACY_0,
-    LEGACY_1,
+    NOT_INITED,
+    I_DUNNO,
+    GDO0_isSYNC_TXEND,
     SYMBOL_TICK
 }eGDIO_MODES;
 
@@ -150,14 +151,14 @@ void setSpi(void);
 void RegConfigSettings(void);
 void Calibrate(void);
 
-void Split_PKTCTRL0(void);
-void Split_PKTCTRL1(void);
-void Split_MDMCFG1(void);
-void Split_MDMCFG2(void);
-void Split_MDMCFG4(void);
-
 public:
 void DumpRegs(void);
+void DumpMirror(char *msg);
+
+void snapshot1(void);
+void snapshot2(void);
+void diffSnapshots(void);
+
 void Init(void);
 int getPktStatus(void);
 
@@ -224,7 +225,7 @@ void SendDataCppString(String &txchar);
 byte CheckReceiveFlag(void);
 byte ReceiveData(byte *rxBuffer);
 bool CheckCRC(void);
-void SpiStrobe(byte strobe);
+uint8_t SpiStrobe(byte strobe);
 void _SpiWriteReg(const char*name, byte addr, byte value, bool bQuiet=false);
 void SpiWriteBurstReg(byte addr, byte *buffer, byte num);
 byte SpiReadReg(byte addr);
@@ -274,6 +275,9 @@ extern SemaphoreHandle_t sem_GDO2_DN ;
 
 extern ELECHOUSE_CC1101 ELECHOUSE_cc1101;
 #define DEFAULT_BAUD 300
+#define CC_FIFOSIZE 64
+#define DEFAULT_MODULATION  3 //fsk-4
+
 
 #define LINE Serial.printf(">>>  %s:%d \n", __FUNCTION__,__LINE__);
  
