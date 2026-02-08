@@ -278,6 +278,7 @@ extern SemaphoreHandle_t sem_GDO2_DN ;
 
 extern ELECHOUSE_CC1101 ELECHOUSE_cc1101;
 #define DEFAULT_BAUD 300
+#define DEFAULT_SPACING 4800  // was 1200
 #define CC_FIFOSIZE 64
 #define DEFAULT_MODULATION  3 //fsk-4
 #define MASK_GETBYTES_FIFO   0x7F            //byte number in RXfifo

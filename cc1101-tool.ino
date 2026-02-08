@@ -124,7 +124,8 @@ uint8_t * makeRandomTxBuffer(uint8_t len)
 	
 	len = min(len, (uint8_t) CC_FIFOSIZE);
 	
-	for (int i= 0; i < len; i++) TX_BUFFER[i] = random(255);
+	//for (int i= 0; i < len; i++) TX_BUFFER[i] = random(255);
+	for (int i= 0; i < len; i++) TX_BUFFER[i] = 0x20 + i; 
 	
 	TX_BUFFER[0]= len;
 	sprintf( (char *) &TX_BUFFER[1],"%03d:", packCtr++);
@@ -143,6 +144,42 @@ void binToAscii(byte *asciiIn, char *hexOut, int len)
 	hexOut[i] = 0;  // overrun if not overallocated.
 }
 
+void hexdump(uint8_t *ptr, uint16_t size)
+{
+	uint16_t keep = size;
+	const int cross = 8;
+	int j;
+	
+	for (int i = 0; i < (size /cross) + !!(size % cross); i++)
+	{
+		uint8_t *dest;
+
+		Serial.printf("\t[%p] ", ptr + i * cross);
+		for (j = 0; j < cross; j++)
+		{
+			dest = ptr + i * cross + j;
+			if (dest < (ptr +size))
+				Serial.printf("%02X ",  *dest);
+			else
+				Serial.printf("   ");
+		}
+		
+		Serial.printf("    ");
+		for (j = 0; j < cross; j++)
+		{
+			
+			dest = ptr + i * cross + j;
+			
+			char x = *(ptr + i * cross + j);
+			if (x < 0x20 || x > 0x7F) x = ' ';
+
+			if (dest >= (ptr+size)) x = 0x95;
+			
+			Serial.printf("%c", x);
+		}
+		Serial.println();
+	}
+}
 
 // convert string with hex numbers to array of bytes
 int  hextoascii(char *pAsciiOut, byte *pHexIn, int len)
@@ -206,7 +243,7 @@ static void cc1101initialize(void)
     											//	4 = MSK.
     											
     ELECHOUSE_cc1101.setMHZ(DEFAULT_TxFREQ);  	// Here you can set your basic frequency. The lib calculates the frequency automatically (default = 433.92).The cc1101 can: 300-348 MHZ, 387-464MHZ and 779-928MHZ. Read More info from datasheet.
-    ELECHOUSE_cc1101.setSymbolSpacingHz(1200);  // Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.
+    ELECHOUSE_cc1101.setSymbolSpacingHz(DEFAULT_SPACING);  // Set the Frequency deviation in kHz. Value from 1.58 to 380.85. Default is 47.60 kHz.
     
     ELECHOUSE_cc1101.setLogicalChanNum(0);         	// Set the Channelnumber from 0 to 255. Default is cahnnel 0.
 
@@ -342,7 +379,7 @@ void rxRcvByFifosFsk4(void)
 	ELECHOUSE_cc1101.setMHZ(0); 				// refresh tx freq
 	ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); 			//4fsk
 	ELECHOUSE_cc1101.setBaudRate(DEFAULT_BAUD);
-	ELECHOUSE_cc1101.setSymbolSpacingHz(1200);
+	ELECHOUSE_cc1101.setSymbolSpacingHz(DEFAULT_SPACING);
 	ELECHOUSE_cc1101.setNumPreambleBytes (7);  	// long preamble
 #endif
 
@@ -354,24 +391,100 @@ void rxRcvByFifosFsk4(void)
 	uint32_t pctr = 0;
 	float freq = ELECHOUSE_cc1101.getMHZ();
 
+	#define MAX_SIZE 100
+	uint8_t rxArray[MAX_SIZE];
+	uint8_t rxIndex = 0;
 
-	int8_t _zero = -1;
-	int8_t _two = -1;
+	int8_t pin0_old = -1;
+	int8_t pin2_old = -1;
+
+	
+	while(pin0_old)
+	{
+		pin0_old = ELECHOUSE_cc1101.getGDO0();
+	}
+	
+	ELECHOUSE_cc1101.SpiReadStatus(CC1101_SFRX); // flush the rx fifo.
+	
+	pin2_old = ELECHOUSE_cc1101.getGDO2();
 	
     while(!Serial.available())
     {
     	ArduinoOTA.handle();
-		bool zero = ELECHOUSE_cc1101.getGDO0();
-		bool two  = ELECHOUSE_cc1101.getGDO2();
+    	
+		bool pin0_now = ELECHOUSE_cc1101.getGDO0();
+		bool pin2_now  = ELECHOUSE_cc1101.getGDO2();
 
-		if (zero != _zero || two != _two)
+		if (pin0_now != pin0_old || pin2_now != pin2_old)
 		{
 		    uint8_t rx_fifo = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO;
 		    
-			_zero = zero;
-			_two = two;
-			Serial.printf("GDO0 = %d   GDO2 = %d rxFifo = %d\n", zero, two, rx_fifo);
+			Serial.printf("GDO0 = %d   GDO2 = %d rxFifo = %d\n", pin0_now, pin2_now, rx_fifo);
 		}
+
+		if (pin0_now  && ! pin0_old)
+		{
+			// rising edge
+			rxIndex = 0;  // frame sync detected. Nothing in rx Q yet.
+			LINE;
+		}
+
+		if (pin0_now  &&  pin0_old)
+		{
+			// still holding a one
+
+			while (true)
+			{
+				// keep reading all but the last byte. 
+			    uint8_t rx_cnt = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO;
+
+				// never fully empty the fifo.
+				if ( rx_cnt <= 1) break;
+
+				// keep read and store ... but not the last byte.
+			    if (rxIndex < MAX_SIZE)
+			    {
+			    	rxArray[rxIndex++] = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXFIFO);
+			    }
+			}			
+		}
+
+		if (!pin0_now  && pin0_old)
+		{
+			// falling edge
+			// no more data incoming ... now clear fifo entirely
+			while (true)
+			{
+			    uint8_t rx_cnt = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO;
+
+				if ( !rx_cnt ) break;
+				LINE;
+
+			    // keep read and store
+			    if (rxIndex < MAX_SIZE)
+			    {
+			    	rxArray[rxIndex++] = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXFIFO);
+			    }
+			}			
+			Serial.printf("HI MOM %d bytes found \n", rxIndex);
+			hexdump(rxArray, rxIndex);
+			Serial.println();
+			memset(rxArray, 0x55, sizeof(rxArray));
+			
+			rxIndex = 0;
+
+		}
+		if (!pin0_now  && ! pin0_old)
+		{
+			delay(1);
+			// still sitting at zero
+			rxIndex = 0;  // nothing to do
+		}
+
+		pin0_old = pin0_now;
+		pin2_old = pin2_now;
+
+		
 /*
     	char abuf[RANDO_LENGTH * 2 + 1];
         Serial.print(F("Sent frame: "));
@@ -416,7 +529,7 @@ void txSendByFifosFsk4(void)
 	ELECHOUSE_cc1101.setMHZ(0); 				// refresh tx freq
 	ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); 			//4fsk
 	ELECHOUSE_cc1101.setBaudRate(DEFAULT_BAUD);
-	ELECHOUSE_cc1101.setSymbolSpacingHz(1200);
+	ELECHOUSE_cc1101.setSymbolSpacingHz(DEFAULT_SPACING);
 	ELECHOUSE_cc1101.setNumPreambleBytes (7);  	// long preamble
 #endif
 
@@ -1215,7 +1328,8 @@ static void exec(char *input)
 				break;
 			}
 			
-			for (int i= 0; i < iCnt; i++) binaryArray[i] = random(255);
+			//for (int i= 0; i < iCnt; i++) binaryArray[i] = random(255);
+			for (int i= 0; i < iCnt; i++) binaryArray[i] = 0x20 + i;
 
         	// send these data to radio over CC1101
 			//ELECHOUSE_cc1101.SendBinaryDataWithNoGDO(binaryArray, iCnt, 1000);

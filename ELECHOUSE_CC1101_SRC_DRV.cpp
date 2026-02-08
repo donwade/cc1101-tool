@@ -62,12 +62,13 @@ uint32_t irqDeltaTimeGDO2;
 #define   WRITE_BURST       0x40            //write burst
 #define   READ_SINGLE       0x80            //read single
 #define   READ_BURST        0xC0            //read burst
-#define   max_modul 6
+
 
 int8_t gModulation = -1;
 byte logical_chan = 0;
-int usrPwrLvlDb = 12;
+int usrPwrLvlDb = 0;
 byte paTableNumber;
+
 byte SCK_PIN;
 byte MISO_PIN;
 byte MOSI_PIN;
@@ -75,13 +76,15 @@ byte SS_PIN;
 byte GDO0;
 byte GDO2;
 bool spi = 0;
+
 eGDIO_MODES ccmode = NOT_INITED;
 eMODEM_STATE trxstate = MODEM_IDLE;
+
 float gMHz = 905.0;
 float tweakFreqHz =  0;
 
-byte pc0PktForm;
-byte pc0LenConf;
+byte uPacketHandleMode;
+byte uPacketLenConf;
 
 
 // NOTE: this is now expressed in hertz, not Smartnet vals
@@ -1747,7 +1750,7 @@ void ELECHOUSE_CC1101::setPktFormat(byte v)
 		break;
 
 		default:
-			assert (pc0PktForm =! pc0PktForm);
+			assert (uPacketHandleMode =! uPacketHandleMode);
 		break;
 	}
 	Serial.print(_DONE);
@@ -1930,7 +1933,7 @@ void ELECHOUSE_CC1101::setLengthConfig(byte v)
 		break;
 
 		default:
-			assert (pc0LenConf =! pc0LenConf);
+			assert (uPacketLenConf =! uPacketLenConf);
 		break;
 	}
 	
