@@ -24,6 +24,7 @@ typedef enum
     NOT_INITED,
     I_DUNNO,
     GDO0_isSYNC_TXEND,
+    GDO0_isSYNC_RX,
     SYMBOL_TICK
 }eGDIO_MODES;
 
@@ -252,6 +253,8 @@ void setAdrChk(byte v);
 bool CheckRxFifo(int t);
 void setGDO0_hostpinMode(int8_t direction = INPUT);
 void setGDO2_hostpinMode(int8_t direction = INPUT);
+bool getGDO0(void);
+bool getGDO2(void);
 
 private:
 
@@ -277,6 +280,7 @@ extern ELECHOUSE_CC1101 ELECHOUSE_cc1101;
 #define DEFAULT_BAUD 300
 #define CC_FIFOSIZE 64
 #define DEFAULT_MODULATION  3 //fsk-4
+#define MASK_GETBYTES_FIFO   0x7F            //byte number in RXfifo
 
 
 #define LINE Serial.printf(">>>  %s:%d \n", __FUNCTION__,__LINE__);

@@ -223,9 +223,9 @@ static void cc1101initialize(void)
     										// Default is max!
 
 	// RSSI locks if sync is found
-    ELECHOUSE_cc1101.setSyncMode(0);        // Combined sync-word qualifier mode. 
+    ELECHOUSE_cc1101.setSyncMode(1);        // Combined sync-word qualifier mode. 
 											// 0 = No preamble/sync. 
-											// 1 = 16 sync word bits detected. 
+											// 1 = 15/16 sync word bits detected. 
 											// 2 = 16/16 sync word bits detected. 
 											// 3 = 30/32 sync word bits detected. 
 											// 4 = No preamble/sync, carrier-sense above threshold. 
@@ -268,7 +268,7 @@ static void cc1101initialize(void)
     										//	2 = Infinite packet length mode. 
     										//  3 = Reserved
     										
-    ELECHOUSE_cc1101.setCrc(0);             // 1 = CRC calculation in TX and CRC check in RX enabled. 
+    ELECHOUSE_cc1101.setCrc(1);             // 1 = CRC calculation in TX and CRC check in RX enabled. 
     										// 0 = CRC disabled for TX and RX.
     										
     ELECHOUSE_cc1101.setCRC_AF(0);          // Enable automatic flush of RX FIFO when CRC is not OK. 
@@ -289,7 +289,7 @@ static void cc1101initialize(void)
     										//		0 = Disable. 
     										//		1 = Enable.
     										
-    ELECHOUSE_cc1101.setNumPreambleBytes(7);             // Sets the minimum number of preamble bytes to be transmitted. 
+    ELECHOUSE_cc1101.setNumPreambleBytes(7);// Sets the minimum number of preamble bytes to be transmitted. 
     										//		Values: 0 : 2, 
     										//				1 : 3, 
     										//				2 : 4,
@@ -328,7 +328,81 @@ static void cc1101initialize(void)
 
 //-----------------------------------------------------------------------
 
-void txSendByFifos(void)
+void rxRcvByFifosFsk4(void)
+{
+	byte *rando;  
+
+	ELECHOUSE_cc1101.EnterIdleMode();
+#if 0
+	ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); //4fsk
+	ELECHOUSE_cc1101.setBaudRate(4.8);
+	ELECHOUSE_cc1101.setDeviation_FSK2(1.8);
+	ELECHOUSE_cc1101.setNumPreambleBytes (7);  // long preamble
+#else
+	ELECHOUSE_cc1101.setMHZ(0); 				// refresh tx freq
+	ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); 			//4fsk
+	ELECHOUSE_cc1101.setBaudRate(DEFAULT_BAUD);
+	ELECHOUSE_cc1101.setSymbolSpacingHz(1200);
+	ELECHOUSE_cc1101.setNumPreambleBytes (7);  	// long preamble
+#endif
+
+	ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_RX);	
+	ELECHOUSE_cc1101.EnterRxMode();
+
+	delay(1000);
+
+	uint32_t pctr = 0;
+	float freq = ELECHOUSE_cc1101.getMHZ();
+
+
+	int8_t _zero = -1;
+	int8_t _two = -1;
+	
+    while(!Serial.available())
+    {
+    	ArduinoOTA.handle();
+		bool zero = ELECHOUSE_cc1101.getGDO0();
+		bool two  = ELECHOUSE_cc1101.getGDO2();
+
+		if (zero != _zero || two != _two)
+		{
+		    uint8_t rx_fifo = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO;
+		    
+			_zero = zero;
+			_two = two;
+			Serial.printf("GDO0 = %d   GDO2 = %d rxFifo = %d\n", zero, two, rx_fifo);
+		}
+/*
+    	char abuf[RANDO_LENGTH * 2 + 1];
+        Serial.print(F("Sent frame: "));
+        for (j = 0; j < RANDO_LENGTH; j++)
+        {
+        	sprintf(&abuf[j*2], "%02X", rando[j]);
+        }
+        abuf[j] = 0;
+        
+        Serial.printf("%f %s\n", freq, abuf);
+
+		int waitSec = 12;
+    	while(waitSec--)
+    	{
+			if(Serial.available()) goto bye1; 
+    		delay(1000);
+        }
+		// for DEBUG only
+*/
+	}
+bye1:
+	Serial.read();
+
+	ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);	
+	ELECHOUSE_cc1101.EnterIdleMode();
+	ELECHOUSE_cc1101.setBaudRate(DEFAULT_BAUD);
+}
+
+//-----------------------------------------------------------------------
+
+void txSendByFifosFsk4(void)
 {
 	byte *rando;  
 
@@ -358,7 +432,7 @@ void txSendByFifos(void)
     {
     	ArduinoOTA.handle();
     	pctr++;
-		if (freq < 800 || pctr > 1) break;    /////////////////////////
+		if (freq < 800 ) break;  // || pctr > 1) break;    /////////////////////////
     	
     	int j;
         Serial.printf("\r\nTransmitting RF packet %d\r\n", pctr);
@@ -471,6 +545,7 @@ static void exec(char *input)
    		    "\r\n"
            ));
         Serial.println(F(
+           "get : get packets from fifo\n"
            "rx : Sniffer. Enable or disable printing of received RF packets on serial terminal.\r\n"
            "tx <hex-vals> : Send packet of max 60 bytes <hex values> over RF\r\n"
            "cal : send 8 ook beacons\r\n"
@@ -606,7 +681,7 @@ static void exec(char *input)
         if (setting == 0)
             Serial.print(F("No preamble"));
         else if (setting == 1)
-            Serial.print(F("16 sync bits"));
+            Serial.print(F("15/16 sync bits"));
         else if (setting == 2)
             Serial.print(F("16/16 sync bits"));
         else if (setting == 3)
@@ -1105,7 +1180,11 @@ static void exec(char *input)
     }
     else if (strcmp_P(cmd, PSTR("tx")) == 0)
     {
-    	txSendByFifos();
+    	txSendByFifosFsk4();
+    }
+    else if (strcmp_P(cmd, PSTR("get")) == 0)
+    {
+    	rxRcvByFifosFsk4();
     }
     else if (strcmp_P(cmd, PSTR("cal")) == 0)
     {
@@ -1985,7 +2064,7 @@ void loop()
 		bFirstTime = false;
 
 #ifndef DNS_YELLOW
-		txSendByFifos();
+		txSendByFifosFsk4();
 #endif
 	
 
@@ -2088,7 +2167,7 @@ void loop()
     //Checks whether something has been received.
     if (ELECHOUSE_cc1101.CheckReceiveFlag() && (receivingmode == 1 || recordingmode == 1 || chatmode == 1))
     {
-
+		Serial.printf("hi don\n");
         //CRC Check. If "setCrc(false)" crc returns always OK!
         if (ELECHOUSE_cc1101.CheckCRC())
         {

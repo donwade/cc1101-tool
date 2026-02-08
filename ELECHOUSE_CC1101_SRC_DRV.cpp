@@ -62,7 +62,6 @@ uint32_t irqDeltaTimeGDO2;
 #define   WRITE_BURST       0x40            //write burst
 #define   READ_SINGLE       0x80            //read single
 #define   READ_BURST        0xC0            //read burst
-#define   BYTES_IN_RXFIFO   0x7F            //byte number in RXfifo
 #define   max_modul 6
 
 int8_t gModulation = -1;
@@ -89,7 +88,7 @@ byte pc0LenConf;
 int32_t hwTweakHz_300_348Mhz[2] = {  2000,    3000 };	// made up
 int32_t hwTweakHz_378_464Mhz[2] = {  3000,    4000 };	// made up
 int32_t hwTweakHz_779_899Mhz[2] = { -25261, -25261 };	// CAL'd
-int32_t hwTweakHz_900_928Mhz[2] = { 52666, 52666 }; // CAL'd
+int32_t hwTweakHz_900_928Mhz[2] = { -52666+5600, -52666+5600 }; // CAL'd
 
 
 int16_t mirror[64];
@@ -443,6 +442,18 @@ void ELECHOUSE_CC1101::setGDO2_hostpinMode(int8_t direction)
 	Serial.printf("\nGDO2 pin %d set to %s\n", GDO2, direction == INPUT? "INPUT":"OUTPUT");
     pinMode(GDO2, direction);
 }
+
+bool ELECHOUSE_CC1101::getGDO0(void)
+{
+	return digitalRead(GDO0);
+}
+
+bool ELECHOUSE_CC1101::getGDO2(void)
+{
+	return digitalRead(GDO2);
+}
+
+
 
 
 /****************************************************************
@@ -1103,8 +1114,27 @@ void callme(void)
 void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
 {
     ccmode = s;
+    
+    if (ccmode == GDO0_isSYNC_RX)
+    {
+    	Serial.printf(FG_RED "%s: ccmode = GDO0 used for rx ---------------\n" _DONE, __FUNCTION__);
 
-    if (ccmode == GDO0_isSYNC_TXEND)
+		setGDO0_hostpinMode(INPUT);
+		setGDO2_hostpinMode(INPUT);
+
+        setGDOxPinConfig(CC1101_IOCFG0, 0x06); // + sync found or EOP found
+        setGDOxPinConfig(CC1101_IOCFG2, 0x01); // rx fifo filled or eop found
+
+        //SpiWriteReg(CC1101_PKTCTRL0, 0x05);
+        setPktFormat(0);		// use fifos.
+        
+        setPacketLength(CC_FIFOSIZE);
+        setLengthConfig(1);		// packet contains the size.
+        
+
+        setBaudRate(DEFAULT_BAUD);
+    }
+    else if (ccmode == GDO0_isSYNC_TXEND)
     {
     	Serial.printf(FG_RED "%s: ccmode = GDO0 used for sentSYNC and TXend ---------------\n" _DONE, __FUNCTION__);
 
@@ -1333,7 +1363,7 @@ void ELECHOUSE_CC1101::setPA(int needDb)
 
 	assert(gModulation != -1);  // nobody set the moduation yet!!!
 
-	Serial.printf(FG_BGREEN "%s: modu=%d usr pwr req = %d table pwr = %d\n", __FUNCTION__, gModulation, needDb, maxPwrLvl);
+	Serial.printf(FG_BGREEN "%s: modulation=%d usr pwr req = %d table pwr = %d\n", __FUNCTION__, gModulation, needDb, maxPwrLvl);
 	
     if (gModulation == 2)
     {
@@ -2050,7 +2080,7 @@ void ELECHOUSE_CC1101::setSyncMode(byte v)
    static const char *msg[] =
    {
 		"No preamble/sync. ",
-	   	"16 sync word bits detected. ",
+	   	"15/16 sync word bits detected. ",
 	   	"16/16 sync word bits detected. ",
 	   	"30/32 sync word bits detected. ",
 	   	"No preamble/sync, carrier-sense above threshold. ",
@@ -2936,7 +2966,7 @@ bool ELECHOUSE_CC1101::CheckRxFifo(int t)
     if (trxstate != MODEM_RX)
         EnterRxMode();
 
-    if (SpiReadStatus(CC1101_RXBYTES) & BYTES_IN_RXFIFO)
+    if (SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO)
     {
         delay(t);
         return 1;
@@ -2982,7 +3012,7 @@ byte ELECHOUSE_CC1101::ReceiveData(byte *rxBuffer)
     byte size;
     byte status[2];
 
-    if (SpiReadStatus(CC1101_RXBYTES) & BYTES_IN_RXFIFO)
+    if (SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO)
     {
         size = SpiReadReg(CC1101_RXFIFO);
         SpiReadBurstReg(CC1101_RXFIFO, rxBuffer, size);
