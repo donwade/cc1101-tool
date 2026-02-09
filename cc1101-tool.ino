@@ -1497,6 +1497,8 @@ static void exec(char *input)
             
             //start recording to the buffer with bitbanging of GDO0 pin state
             Serial.print(F("\r\n New Sniffer enabled...\r\n"));
+
+            // GD02 is constant clock at di-bit rate. (half the baud rate)
             ELECHOUSE_cc1101.setGDO2_hostpinMode(INPUT);
 
 			ELECHOUSE_cc1101.enableRisingIRQ_GDO2(true);
@@ -1517,6 +1519,15 @@ static void exec(char *input)
 					// di-bit count, move by 2 bits per symbol.
                     for (int j = 7; j > 0 ; j -=2)                        // 8 bits in a byte
                     {
+                    	/*
+                    		00 +600
+                    		01 +1800
+                    		10 -600
+                    		11 -1800
+
+                    		therefore a sync is +/-1800 hz
+                    		therefore sync bit pattern is 01 11 or 0111
+                    	*/
 						bool ret = ELECHOUSE_cc1101.wait4RisingIRQ_GDO2();
 						if (ret == true)
 						{
@@ -1529,7 +1540,7 @@ static void exec(char *input)
 							bitWrite(receivedbyte, j-1, digitalRead(PIN_GDO0));	// Capture GDO0 state into the byte
 						}
 						else
-							Serial.print('x'); //should never happen.
+							Serial.println("Error: GDO02 did not move in 3 seconds\n"); //should never happen.
 						
                      }
 
