@@ -58,8 +58,11 @@ void runP25(void)
 
 	// Any received char over Serial port stops printing  RF received bytes
 
-	uint32_t start = micros();
-	uint32_t bitTime = start;
+	uint32_t lastSignalTimeUs = micros();
+	uint32_t bitTimeUs = lastSignalTimeUs;
+
+	// allow bit time to be off by 5%
+	const uint32_t bitLimitUs = (1000000. /float(DEFAULT_BAUD)) * 105./100.; 
 	
 	while (!Serial.available())
 	{
@@ -95,11 +98,14 @@ void runP25(void)
 						delay(-1);
 					}
 
-					uint32_t bitDelta = now - bitTime;
-					bitTime = now;
+					uint32_t bitDelta = now - bitTimeUs;
+					bitTimeUs = now;
 
-					Serial.printf("bit time = %d\n", bitTime);
-					
+					if (bitDelta > bitLimitUs)
+					{
+						Serial.printf("bit time = %d bit limit =%d\n", bitDelta, bitLimitUs);
+						//delay(-1);
+					}
 					
 					ulastTimeRisingGO2 = 0; // just for fun
 					
@@ -107,11 +113,13 @@ void runP25(void)
 					
 					// GDO0 points to one part of the di-bit.
 					ELECHOUSE_cc1101.setGDOxPinConfig(CC1101_IOCFG0, 0x16, true);
+
 					bitHi = digitalRead(PIN_GDO0);
 					bitWrite(receivedbyte, j, bitHi);	// Capture GDO0 state into the byte
 
 					// GDO0 points to the OTHER part of the di-bit.
 					ELECHOUSE_cc1101.setGDOxPinConfig(CC1101_IOCFG0, 0x17, true);
+
 					bitLo = digitalRead(PIN_GDO0);
 					bitWrite(receivedbyte, j-1, bitLo); // Capture GDO0 state into the byte
 
@@ -126,7 +134,7 @@ void runP25(void)
 				{
 					// stall timers until bitstream appears.
 					ulastTimeRisingGO2 = now;
-					bitTime = now;
+					bitTimeUs = now;
 					Serial.println("Error: GDO02 did not move in 3 seconds\n"); //should never happen.
 				}	
 			 }
@@ -151,7 +159,7 @@ void runP25(void)
 	}; // end of While loop
 	Serial.read();
 	
-	uint32_t deltaT = micros() - start;
+	uint32_t deltaT = micros() - lastSignalTimeUs;
 
 	Serial.printf("\nStopping the new sniffer. up=%d dn=%d \n", irqUpCtrGDO2, irqDnCtrGDO2);
 	Serial.printf("\nbitrate = %f\n", (float) irqUpCtrGDO2 / (float) deltaT);
