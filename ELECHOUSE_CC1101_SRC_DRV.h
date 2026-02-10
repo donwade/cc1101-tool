@@ -290,6 +290,12 @@ void runP25(void);
 
 #define LINE Serial.printf(">>>  %s:%d \n", __FUNCTION__,__LINE__);
 
+extern uint32_t ulastTimeRisingGO0;
+extern uint32_t ulastTimeFallingGO0;
+extern uint32_t ulastTimeRisingGO2;
+extern uint32_t ulastTimeFallingGO2;
+
+
 #if defined (ARDUINO_M5STACK_CORE2)
 
 #define PIN_MOSI 23

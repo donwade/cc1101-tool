@@ -313,6 +313,11 @@ void ELECHOUSE_CC1101::DumpRegs(void)
 	}
 }
 //-------------------------------------------------------------
+uint32_t ulastTimeRisingGO0;
+uint32_t ulastTimeFallingGO0;
+uint32_t ulastTimeRisingGO2;
+uint32_t ulastTimeFallingGO2;
+
 
 ICACHE_RAM_ATTR void onGDO0_IRQ(void)
 {
@@ -327,6 +332,7 @@ ICACHE_RAM_ATTR void onGDO0_IRQ(void)
 		if (bGDO0_HasRisingCallback)
 		{
 			irqUpCtrGDO0++;
+			ulastTimeRisingGO0 = micros();
 			xSemaphoreGiveFromISR( sem_GDO0_UP, &xHigherPriorityTaskWoken );
 		}
 	}
@@ -335,6 +341,8 @@ ICACHE_RAM_ATTR void onGDO0_IRQ(void)
 		if (bGDO0_HasFallingCallback)
 		{
 			irqDnCtrGDO0++;
+			
+			ulastTimeFallingGO0 = micros();
 			xSemaphoreGiveFromISR( sem_GDO0_DN, &xHigherPriorityTaskWoken );
 		}
 	}
@@ -358,6 +366,7 @@ ICACHE_RAM_ATTR void onGDO2_IRQ(void)
 		if (bGDO2_HasRisingCallback)
 		{
 			irqUpCtrGDO2++;
+			ulastTimeRisingGO2 = micros();
 			xSemaphoreGiveFromISR( sem_GDO2_UP, &xHigherPriorityTaskWoken );
 		}
 	}
@@ -366,6 +375,8 @@ ICACHE_RAM_ATTR void onGDO2_IRQ(void)
 		if (bGDO2_HasFallingCallback)
 		{
 			irqDnCtrGDO2++;
+			
+			ulastTimeFallingGO2 = micros();
 			xSemaphoreGiveFromISR( sem_GDO2_DN, &xHigherPriorityTaskWoken );
 		}
 	}
