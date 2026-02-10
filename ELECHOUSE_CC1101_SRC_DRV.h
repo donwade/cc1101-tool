@@ -283,7 +283,39 @@ extern ELECHOUSE_CC1101 ELECHOUSE_cc1101;
 #define DEFAULT_MODULATION  3 //fsk-4
 #define MASK_GETBYTES_FIFO   0x7F            //byte number in RXfifo
 
+void runP25(void);
+// buffer for recording and replaying of many frames
+
+#define RECORDINGBUFFERSIZE 4096/2    // Buffer for recording the frames
 
 #define LINE Serial.printf(">>>  %s:%d \n", __FUNCTION__,__LINE__);
+
+#if defined (ARDUINO_M5STACK_CORE2)
+
+#define PIN_MOSI 23
+#define PIN_MISO 38
+#define PIN_SCK 18
+
+#define PIN_CS 27
+
+#define PIN_GDO2 19
+#define PIN_GDO0 33
+
+#elif defined (ARDUINO_M5STACK_CORES3)
+#define PIN_MOSI 37
+#define PIN_MISO 35
+#define PIN_SCK 36
+
+#define PIN_CS 5
+
+#define PIN_GDO2 10
+#define PIN_GDO0 7
+
+#else
+#error unknown processor
+#endif
+
  
+void binToAscii(byte *asciiIn, char *hexOut, int len);
+
 #endif

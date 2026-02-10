@@ -51,7 +51,6 @@ static uint32_t irqLastTimeGDO2;
 uint32_t irqDeltaTimeGDO0;
 uint32_t irqDeltaTimeGDO2;
 
-
 #ifdef ARDUINO_M5STACK_CORES3
   SPIClass MY_SPI( FSPI);
 #else
@@ -549,9 +548,18 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value, boo
 	mirror[addr] = value;
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
 
     MY_SPI.transfer(addr);
     MY_SPI.transfer(value);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
     SpiEnd();
     
@@ -573,12 +581,19 @@ void ELECHOUSE_CC1101::SpiWriteBurstReg(byte addr, byte *buffer, byte num)
     temp = addr | WRITE_BURST;
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
     
     MY_SPI.transfer(temp);
 
     for (i = 0; i < num; i++)
         MY_SPI.transfer(buffer[i]);
 
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
     SpiEnd();
@@ -642,9 +657,15 @@ uint8_t ELECHOUSE_CC1101::SpiStrobe(byte commandStrobe)
 	
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
 
     uint8_t ret = MY_SPI.transfer(commandStrobe); // commands only send an address w no data
     
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
 
@@ -668,9 +689,17 @@ byte ELECHOUSE_CC1101::SpiReadReg(byte addr)
     SpiStart();
     temp = addr | READ_SINGLE;
     digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
 
     MY_SPI.transfer(temp);
     value = MY_SPI.transfer(0);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
 
     SpiEnd();
@@ -692,12 +721,19 @@ void ELECHOUSE_CC1101::SpiReadBurstReg(byte addr, byte *buffer, byte num)
     temp = addr | READ_BURST;
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
 
     MY_SPI.transfer(temp);
 
     for (i = 0; i < num; i++)
         buffer[i] = MY_SPI.transfer(0);
 
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
     
@@ -718,11 +754,19 @@ byte ELECHOUSE_CC1101::SpiReadStatus(byte addr)
     SpiStart();
     temp = addr | READ_BURST;
     digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
+    digitalWrite(SS_PIN, LOW);
 
     MY_SPI.transfer(temp);
     value = MY_SPI.transfer(0);
 
     digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SS_PIN, HIGH);
+
     SpiEnd();
     return value;
 }
@@ -2895,9 +2939,17 @@ void ELECHOUSE_CC1101::SendBinaryData(byte *txBuffer, byte size)
 	// first byte in to tx is the size!
     _SpiWriteReg("CC1101_TXFIFO", CC1101_TXFIFO, size, true);
 
-	// all following bytes are sent off.
-    SpiWriteBurstReg(CC1101_TXFIFO, txBuffer, size);    //write data to send
 
+#if 0
+	for (int i = 0; i < size; i++) _SpiWriteReg("CC1101_TXFIFO", CC1101_TXFIFO, txBuffer[i], true);
+
+	Serial.printf("%s: NOT USING BURST MODE on TX\n", __FUNCTION__);
+	// all following bytes are sent off.
+#else	
+    SpiWriteBurstReg(CC1101_TXFIFO, txBuffer, size);    //write data to send
+#endif
+
+	
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_STX);      //start send
 

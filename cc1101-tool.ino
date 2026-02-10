@@ -43,7 +43,6 @@ const char *password = MY_SSID_PASSWORD;
 #include <EEPROM.h>
 #include <SPI.h>
 
-#define RECORDINGBUFFERSIZE 4096    // Buffer for recording the frames
 #define EPROMSIZE 512               // Size of EEPROM in your Arduino chip. For ESP32 it is Flash simulated so very slow
 #define BUF_LENGTH 128              // Buffer for the incoming command.
 
@@ -52,32 +51,6 @@ const char *password = MY_SSID_PASSWORD;
 #define DEFAULT_RxFREQ 867.38751
 
 #define DEFAULT_STEP   12500
-
-#if defined (ARDUINO_M5STACK_CORE2)
-
-byte PIN_MOSI = 23;
-byte PIN_MISO = 38;
-byte PIN_SCK = 18;
-
-byte PIN_CS = 27;
-
-int PIN_GDO2 = 19;
-int PIN_GDO0 = 33;
-
-#elif defined (ARDUINO_M5STACK_CORES3)
-byte PIN_MOSI = 37;
-byte PIN_MISO = 35;
-byte PIN_SCK = 36;
-
-byte PIN_CS = 5;
-
-int PIN_GDO2 = 10;
-int PIN_GDO0 = 7;
-
-#else
-#error unknown processor
-#endif
-
 
 // position in big recording buffer
 int bigrecordingbufferpos = 0;
@@ -125,10 +98,18 @@ uint8_t * makeRandomTxBuffer(uint8_t len)
 	len = min(len, (uint8_t) CC_FIFOSIZE);
 	
 	//for (int i= 0; i < len; i++) TX_BUFFER[i] = random(255);
-	for (int i= 0; i < len; i++) TX_BUFFER[i] = 0x20 + i; 
-	
-	TX_BUFFER[0]= len;
-	sprintf( (char *) &TX_BUFFER[1],"%03d:", packCtr++);
+	for (int i= 0; i < len -7 ; i++) TX_BUFFER[i+7] = i; 
+
+	TX_BUFFER[0] = 0x55;
+	TX_BUFFER[1] = 0xAA;
+	TX_BUFFER[2] = 0x55;
+	TX_BUFFER[3] = 0xAA;
+	TX_BUFFER[4] = 0x55;
+	TX_BUFFER[5] = 0xAA;
+	TX_BUFFER[6] = 0x55;
+ 	
+	//TX_BUFFER[0]= len;
+	//sprintf( (char *) &TX_BUFFER[1],"%03d:", packCtr++);
 
 	return TX_BUFFER;
 }
@@ -350,7 +331,7 @@ static void cc1101initialize(void)
 
     										
 											
-	ELECHOUSE_cc1101.setLnaStrategy(1);
+	ELECHOUSE_cc1101.setLnaStrategy(0);
 	ELECHOUSE_cc1101.setCarrierSenseAbs(99);  // disabled (>7)
 	ELECHOUSE_cc1101.setCarrierSenseRel(9);
 	ELECHOUSE_cc1101.setMAGNTarget(33);
@@ -672,7 +653,7 @@ static void exec(char *input)
            "flush : Clear the recording buffer\r\n"
            "play <N> : Replay 0 = all frames or N-th recorded frame previously stored in the buffer.\r\n"
    		    "\r\n"
-   		   "rxnew : fsk with SYMBOL clock\r\n"
+   		   "p25 : fsk with SYMBOL clock\r\n"
            "rxraw <microseconds> : Sniffs radio by sampling with <microsecond> interval \n\tand prints received bytes in hex.\r\n"
            "recraw <microseconds> : Recording RAW RF data with <microsecond> sampling interval.\r\n"
            ));
@@ -1482,108 +1463,10 @@ static void exec(char *input)
         }
 
     } 
-    else if (strcmp_P(cmd, PSTR("rxnew")) == 0)
-    {
-        // take interval period for samplink
-        //setting = atoi(param2);
-		setting =  (1.e6/9600);
-		
-        if (setting > 0)
-        {
-            // setup async mode on CC1101 with GDO0 pin processing
-            ELECHOUSE_cc1101.setCCMode(SYMBOL_TICK);
-            ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); //fsk-4
-            ELECHOUSE_cc1101.EnterRxMode();
-            
-            //start recording to the buffer with bitbanging of GDO0 pin state
-            Serial.print(F("\r\n New Sniffer enabled...\r\n"));
-
-            // GD02 is constant clock at di-bit rate. (half the baud rate)
-            ELECHOUSE_cc1101.setGDO2_hostpinMode(INPUT);
-
-			ELECHOUSE_cc1101.enableRisingIRQ_GDO2(true);
-
-            // Any received char over Serial port stops printing  RF received bytes
-
-            uint32_t start = micros();
-            while (!Serial.available())
-            {
-#if 1
-			
-                // we have to use the buffer not to introduce delays
-                for (int i = 0; i < RECORDINGBUFFERSIZE ; i++)
-                {
-                
-                    byte receivedbyte = 0;
-
-					// di-bit count, move by 2 bits per symbol.
-                    for (int j = 7; j > 0 ; j -=2)                        // 8 bits in a byte
-                    {
-                    	/*
-                    		00 +600
-                    		01 +1800
-                    		10 -600
-                    		11 -1800
-
-                    		therefore a sync is +/-1800 hz
-                    		therefore sync bit pattern is 01 11 or 0111
-                    	*/
-						bool ret = ELECHOUSE_cc1101.wait4RisingIRQ_GDO2();
-						if (ret == true)
-						{
-							// GDO0 points to one part of the di-bit.
-							ELECHOUSE_cc1101.setGDOxPinConfig(CC1101_IOCFG0, 0x16, true);
-							bitWrite(receivedbyte, j, digitalRead(PIN_GDO0));	// Capture GDO0 state into the byte
-
-							// GDO0 points to the OTHER part of the di-bit.
-							ELECHOUSE_cc1101.setGDOxPinConfig(CC1101_IOCFG0, 0x17, true);
-							bitWrite(receivedbyte, j-1, digitalRead(PIN_GDO0));	// Capture GDO0 state into the byte
-						}
-						else
-							Serial.println("Error: GDO02 did not move in 3 seconds\n"); //should never happen.
-						
-                     }
-
-                    ;
-                    // store the output into recording buffer
-                    bigrecordingbuffer[i] = receivedbyte;
-                }
-
-
-                // when buffer full print the ouptput to serial port
-                for (int i = 0; i < RECORDINGBUFFERSIZE ; i = i + 32)
-                {
-                    binToAscii(&bigrecordingbuffer[i], textBuffer, 32);
-                    Serial.print((char *)textBuffer);
-                }
-
-#endif
-            }; // end of While loop
-			Serial.read();
-			
-            uint32_t deltaT = micros() - start;
-
-            Serial.printf("\nStopping the new sniffer. up=%d dn=%d \n", irqUpCtrGDO2, irqDnCtrGDO2);
-            Serial.printf("\nbitrate = %f\n", (float) irqUpCtrGDO2 / (float) deltaT);
-            
-			ELECHOUSE_cc1101.enableRisingIRQ_GDO2(false);
-
-
-            // setting normal pkt format again
-            ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);
-            ELECHOUSE_cc1101.setPktFormat(0);
-            ELECHOUSE_cc1101.EnterRxMode();
-        }
-        else
-        {
-            Serial.print(F("Wrong parameters.\r\n"));
-        }
-
-        ;
-
-
-        // handling PLAYRAW command
-    }
+    else if (strcmp_P(cmd, PSTR("p25")) == 0)
+	{
+    	runP25();
+    }	
     else if (strcmp_P(cmd, PSTR("playraw")) == 0)
     {
         // take interval period for sampling
