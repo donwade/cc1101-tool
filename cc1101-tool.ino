@@ -417,7 +417,7 @@ void rxRcvByFifosFsk4(void)
 			while (true)
 			{
 				// keep reading all but the last byte. 
-			    uint8_t rx_cnt = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO;
+				uint8_t rx_cnt = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO;
 
 				// never fully empty the fifo.
 				if ( rx_cnt <= 1) break;
@@ -426,6 +426,8 @@ void rxRcvByFifosFsk4(void)
 			    if (rxIndex < MAX_SIZE)
 			    {
 			    	rxArray[rxIndex++] = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXFIFO);
+					rx_cnt = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO;
+					Serial.printf("rxFifo = %d\n", rx_cnt);
 			    }
 			}			
 		}

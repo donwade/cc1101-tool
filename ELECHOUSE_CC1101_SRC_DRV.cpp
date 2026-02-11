@@ -1105,8 +1105,8 @@ typedef struct {
 
 PIN_DEF pin_defs[] =
 {
-  { 0 ,"Associated to the RX FIFO\n\tAsserts when RX FIFO is filled at or above the RX FIFO threshold\n\tDe-asserts when RX FIFO is drained below the same"},
-  { 1 ,"Associated to the RX FIFO\n\tAsserts when RX FIFO is filled at or above the RX FIFO threshold or the end of packet is reached\n\tDe-asserts when t"},
+  { 0 ,"Associated to the RX FIFO\n\tAsserts when RX FIFO is filled at or above the RX FIFO threshold\n\tDe-asserts when RX FIFO is drained below the same threshold"},
+  { 1 ,"Associated to the RX FIFO\n\tAsserts when RX FIFO is filled at or above the RX FIFO threshold or the end of packet is reached\n\tDe-asserts when the RX fifo is empty"},
   { 2 ,"Associated to the TX FIFO\n\tAsserts when the TX FIFO is filled at or above the TX FIFO threshold\n\tDe-asserts when the TX FIFO is below the same"},
   { 3 ,"Associated to the TX FIFO\n\tAsserts when TX FIFO is full\n\tDe-asserts when the TX FIFO is drained below the TX FIFO threshold."},
   { 4 ,"Asserts when the RX FIFO has overflowed\n\tDe-asserts when the FIFO has been flushed."},
@@ -2960,6 +2960,13 @@ void ELECHOUSE_CC1101::SendBinaryData(byte *txBuffer, byte size)
     SpiWriteBurstReg(CC1101_TXFIFO, txBuffer, size);    //write data to send
 #endif
 
+	uint8_t len; 
+	do
+	{
+		len = SpiStrobe(CC1101_TXBYTES);
+		Serial.printf("%s len = %d\n", __FUNCTION__, len);
+		delay(1);
+	} while (len);
 	
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_STX);      //start send
@@ -3075,22 +3082,22 @@ byte ELECHOUSE_CC1101::CheckReceiveFlag(void)
 ****************************************************************/
 byte ELECHOUSE_CC1101::ReceiveData(byte *rxBuffer)
 {
-    byte size;
+    byte bytesInQ;
     byte status[2];
 
     if (SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO)
     {
-        size = SpiReadReg(CC1101_RXFIFO);
-        SpiReadBurstReg(CC1101_RXFIFO, rxBuffer, size);
+        bytesInQ = SpiReadReg(CC1101_RXFIFO);
+        SpiReadBurstReg(CC1101_RXFIFO, rxBuffer, bytesInQ);
         SpiReadBurstReg(CC1101_RXFIFO, status, 2);
-        SpiStrobe(CC1101_SFRX);
-        SpiStrobe(CC1101_SRX);
-        return size;
+        //SpiStrobe(CC1101_SFRX);
+        //SpiStrobe(CC1101_SRX);
+        return bytesInQ;
     }
     else
     {
-        SpiStrobe(CC1101_SFRX);
-        SpiStrobe(CC1101_SRX);
+        //SpiStrobe(CC1101_SFRX);  no flush on empty
+        //SpiStrobe(CC1101_SRX);
         return 0;
     }
 }
