@@ -758,7 +758,7 @@ void ELECHOUSE_CC1101::SpiReadBurstReg(byte addr, byte *buffer, byte num)
 * INPUT        :addr: register address
 * OUTPUT       :status value
 ****************************************************************/
-byte ELECHOUSE_CC1101::SpiReadStatus(byte addr)
+byte ELECHOUSE_CC1101::SpiReadStatus(STATUS_REG addr)
 {
     byte value, temp;
 
@@ -1531,7 +1531,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
         else
         {
             SpiWriteReg(CC1101_TEST0, 0x09);
-            int s = ELECHOUSE_cc1101.SpiReadStatus(CC1101_FSCAL2);
+            int s = ELECHOUSE_cc1101.SpiReadReg(CC1101_FSCAL2);
 
             if (s < 32)
                 SpiWriteReg(CC1101_FSCAL2, s + 32);
@@ -1554,7 +1554,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
         else
         {
             SpiWriteReg(CC1101_TEST0, 0x09);
-            int s = ELECHOUSE_cc1101.SpiReadStatus(CC1101_FSCAL2);
+            int s = ELECHOUSE_cc1101.SpiReadReg(CC1101_FSCAL2);
 
             if (s < 32)
                 SpiWriteReg(CC1101_FSCAL2, s + 32);
@@ -1578,7 +1578,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
         else
         {
             SpiWriteReg(CC1101_TEST0, 0x09);
-            int s = ELECHOUSE_cc1101.SpiReadStatus(CC1101_FSCAL2);
+            int s = ELECHOUSE_cc1101.SpiReadReg(CC1101_FSCAL2);
 
             if (s < 32)
                 SpiWriteReg(CC1101_FSCAL2, s + 32);
@@ -1597,7 +1597,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
 		SpiWriteReg(CC1101_FSCTRL0, (uint8_t)(offset / hzPerStep));
 		
         SpiWriteReg(CC1101_TEST0, 0x09);
-        int s = ELECHOUSE_cc1101.SpiReadStatus(CC1101_FSCAL2);
+        int s = ELECHOUSE_cc1101.SpiReadReg(CC1101_FSCAL2);
 
         if (s < 32)
             SpiWriteReg(CC1101_FSCAL2, s + 32);
@@ -1649,7 +1649,7 @@ bool ELECHOUSE_CC1101::getCC1101(void)
 {
     setSpi();
 	
-    uint8_t foo = SpiReadStatus(0x31);
+    uint8_t foo = SpiReadStatus(STATUS_VERSION);
     Serial.printf("h/w version %d\n", foo); 
     delay(2000);
     
@@ -2667,7 +2667,7 @@ int ELECHOUSE_CC1101::getRssi(void)
 {
     int rssi;
 
-    rssi = SpiReadStatus(CC1101_RSSI);
+    rssi = SpiReadStatus(STATUS_RSSI);
 
     if (rssi >= 128)
         rssi = (rssi - 256) / 2 - 74;
@@ -2700,7 +2700,7 @@ int ELECHOUSE_CC1101::getPktStatus(void)
 	uint32_t delta = now - lastTime;
 	lastTime = now;
 	
-	uint8_t orig= SpiReadReg(CC1101_PKTSTATUS);
+	uint8_t orig= SpiReadReg(STATUS_PKTSTATUS);
 	
 	bCarrierSense 	= regMaskRead <uint8_t> ( orig, 6, 6);
 	bPQTpass 		= regMaskRead <uint8_t> ( orig, 5, 5);
@@ -2794,7 +2794,7 @@ byte ELECHOUSE_CC1101::getLqi(void)
 {
     byte lqi;
 
-    lqi = SpiReadStatus(CC1101_LQI);
+    lqi = SpiReadStatus(STATUS_LQI);
     return lqi;
 }
 
@@ -2839,7 +2839,7 @@ byte ELECHOUSE_CC1101::getState(void)
 
     while(true)
     {
-   		status = SpiReadStatus(CC1101_MARCSTATE);
+   		status = SpiReadStatus(STATUS_MARCSTATE);
 	    if ( status < elem)
 	    {
 			Serial.printf(FG_GREEN "%s:  %d = %s\n", __FUNCTION__, status, msg[ status].right);
@@ -2963,7 +2963,7 @@ void ELECHOUSE_CC1101::SendBinaryData(byte *txBuffer, byte size)
 	uint8_t len; 
 	do
 	{
-		len = SpiStrobe(CC1101_TXBYTES);
+		len = SpiStrobe(STATUS_TXBYTES);
 		Serial.printf("%s len = %d\n", __FUNCTION__, len);
 		delay(1);
 	} while (len);
@@ -3012,7 +3012,7 @@ void ELECHOUSE_CC1101::SendBinaryDataWithNoGDO(byte *txBuffer, byte size, int t)
 ****************************************************************/
 bool ELECHOUSE_CC1101::CheckCRC(void)
 {
-    byte lqi = SpiReadStatus(CC1101_LQI);
+    byte lqi = SpiReadStatus(STATUS_LQI);
     bool crc_ok = bitRead(lqi, 7);
 
     if (crc_ok == 1)
@@ -3039,7 +3039,7 @@ bool ELECHOUSE_CC1101::CheckRxFifo(int t)
     if (trxstate != MODEM_RX)
         EnterRxMode();
 
-    if (SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO)
+    if (SpiReadStatus(STATUS_RXBYTES) & MASK_GETBYTES_FIFO)
     {
         delay(t);
         return 1;
@@ -3085,7 +3085,7 @@ byte ELECHOUSE_CC1101::ReceiveData(byte *rxBuffer)
     byte bytesInQ;
     byte status[2];
 
-    if (SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO)
+    if (SpiReadStatus(STATUS_RXBYTES) & MASK_GETBYTES_FIFO)
     {
         bytesInQ = SpiReadReg(CC1101_RXFIFO);
         SpiReadBurstReg(CC1101_RXFIFO, rxBuffer, bytesInQ);

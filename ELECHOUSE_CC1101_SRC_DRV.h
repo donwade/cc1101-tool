@@ -116,18 +116,22 @@ typedef enum {
 #define CC1101_SNOP         0x3D        // No operation. May be used to pad strobe commands to two
                                         // INT8Us for simpler software.
 //CC1101 STATUS REGSITER
-#define CC1101_PARTNUM      0x30
-#define CC1101_VERSION      0x31
-#define CC1101_FREQEST      0x32
-#define CC1101_LQI          0x33
-#define CC1101_RSSI         0x34
-#define CC1101_MARCSTATE    0x35
-#define CC1101_WORTIME1     0x36
-#define CC1101_WORTIME0     0x37
-#define CC1101_PKTSTATUS    0x38
-#define CC1101_VCO_VC_DAC   0x39
-#define CC1101_TXBYTES      0x3A
-#define CC1101_RXBYTES      0x3B
+typedef enum STATUS_REG
+{
+    STATUS_PARTNUM =0x30,
+    STATUS_VERSION      ,
+    STATUS_FREQEST      ,
+    STATUS_LQI          ,
+    STATUS_RSSI         ,
+    STATUS_MARCSTATE    ,
+    STATUS_WORTIME1     ,
+    STATUS_WORTIME0     ,
+    STATUS_PKTSTATUS    ,
+    STATUS_VCO_VC_DAC   ,
+    STATUS_TXBYTES      ,
+    STATUS_RXBYTES
+};
+
 
 //CC1101 PATABLE,TXFIFO,RXFIFO
 #define CC1101_PATABLE      0x3E
@@ -163,7 +167,7 @@ void diffSnapshots(void);
 void Init(void);
 int getPktStatus(void);
 
-byte SpiReadStatus(byte addr);
+byte SpiReadStatus(STATUS_REG addr);
 void setSpiPin(byte sck, byte miso, byte mosi, byte ss);
 void setGDOx(byte gdo0, byte gdo2);
 void defineGDO0_pinNum(byte gdo0);

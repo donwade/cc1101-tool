@@ -385,7 +385,7 @@ void rxRcvByFifosFsk4(void)
 		pin0_old = ELECHOUSE_cc1101.getGDO0();
 	}
 	
-	ELECHOUSE_cc1101.SpiReadStatus(CC1101_SFRX); // flush the rx fifo.
+	ELECHOUSE_cc1101.SpiReadReg(CC1101_SFRX); // flush the rx fifo.
 	
 	pin2_old = ELECHOUSE_cc1101.getGDO2();
 	
@@ -398,7 +398,7 @@ void rxRcvByFifosFsk4(void)
 
 		if (pin0_now != pin0_old || pin2_now != pin2_old)
 		{
-		    uint8_t rx_fifo = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO;
+		    uint8_t rx_fifo = ELECHOUSE_cc1101.SpiReadStatus(STATUS_RXBYTES) & MASK_GETBYTES_FIFO;
 		    
 			Serial.printf("GDO0 = %d   GDO2 = %d rxFifo = %d\n", pin0_now, pin2_now, rx_fifo);
 		}
@@ -417,7 +417,7 @@ void rxRcvByFifosFsk4(void)
 			while (true)
 			{
 				// keep reading all but the last byte. 
-				uint8_t rx_cnt = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO;
+				uint8_t rx_cnt = ELECHOUSE_cc1101.SpiReadStatus(STATUS_RXBYTES) & MASK_GETBYTES_FIFO;
 
 				// never fully empty the fifo.
 				if ( rx_cnt <= 1) break;
@@ -425,8 +425,8 @@ void rxRcvByFifosFsk4(void)
 				// keep read and store ... but not the last byte.
 			    if (rxIndex < MAX_SIZE)
 			    {
-			    	rxArray[rxIndex++] = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXFIFO);
-					rx_cnt = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO;
+			    	rxArray[rxIndex++] = ELECHOUSE_cc1101.SpiReadReg(CC1101_RXFIFO);
+					rx_cnt = ELECHOUSE_cc1101.SpiReadStatus(STATUS_RXBYTES) & MASK_GETBYTES_FIFO;
 					Serial.printf("rxFifo = %d\n", rx_cnt);
 			    }
 			}			
@@ -438,7 +438,7 @@ void rxRcvByFifosFsk4(void)
 			// no more data incoming ... now clear fifo entirely
 			while (true)
 			{
-			    uint8_t rx_cnt = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXBYTES) & MASK_GETBYTES_FIFO;
+			    uint8_t rx_cnt = ELECHOUSE_cc1101.SpiReadStatus(STATUS_RXBYTES) & MASK_GETBYTES_FIFO;
 
 				if ( !rx_cnt ) break;
 				LINE;
@@ -446,7 +446,7 @@ void rxRcvByFifosFsk4(void)
 			    // keep read and store
 			    if (rxIndex < MAX_SIZE)
 			    {
-			    	rxArray[rxIndex++] = ELECHOUSE_cc1101.SpiReadStatus(CC1101_RXFIFO);
+			    	rxArray[rxIndex++] = ELECHOUSE_cc1101.SpiReadReg(CC1101_RXFIFO);
 			    }
 			}			
 			Serial.printf("HI MOM %d bytes found \n", rxIndex);
