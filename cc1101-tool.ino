@@ -385,7 +385,7 @@ void rxRcvByFifosFsk4(void)
 		pin0_old = ELECHOUSE_cc1101.getGDO0();
 	}
 	
-	ELECHOUSE_cc1101.SpiReadReg(CC1101_SFRX); // flush the rx fifo.
+	ELECHOUSE_cc1101.SpiReadReg(STROBE_SFRX); // flush the rx fifo.
 	
 	pin2_old = ELECHOUSE_cc1101.getGDO2();
 	

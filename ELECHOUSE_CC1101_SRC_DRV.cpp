@@ -485,7 +485,7 @@ void ELECHOUSE_CC1101::Reset(void)
 
     digitalWrite(SS_PIN, LOW);
 
-    MY_SPI.transfer(CC1101_SRES);
+    MY_SPI.transfer(STROBE_SRES);
 
     digitalWrite(SS_PIN, HIGH);
     Serial.printf(FG_FYELLOW "%s: RESET !!!! \n" _DONE, __FUNCTION__); 
@@ -651,7 +651,7 @@ ONE okay[] =
 
 
 
-uint8_t ELECHOUSE_CC1101::SpiStrobe(byte commandStrobe)
+uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBES commandStrobe)
 {
     SpiStart();
 	assert(commandStrobe != 0x3B);
@@ -2606,10 +2606,10 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
 void ELECHOUSE_CC1101::EnterTxMode(void)
 {
 	Serial.printf("************* Enter tx mode \n");
-    SpiStrobe(CC1101_SIDLE);
+    SpiStrobe(STROBE_SIDLE);
     setMHZ(gMHz);
     
-    SpiStrobe(CC1101_STX);      //start send
+    SpiStrobe(STROBE_STX);      //start send
     
     Serial.printf(FG_FYELLOW "%s: TX MODE !!!! \n", __FUNCTION__);
     trxstate = MODEM_TX;
@@ -2628,8 +2628,8 @@ void ELECHOUSE_CC1101::EnterTxMode(void)
 void ELECHOUSE_CC1101::EnterRxMode(void)
 {
 	Serial.printf("************** EnterRxMode ****\n");
-    SpiStrobe(CC1101_SIDLE);
-    SpiStrobe(CC1101_SRX);      //start receive
+    SpiStrobe(STROBE_SIDLE);
+    SpiStrobe(STROBE_SRX);      //start receive
     
     Serial.printf(FG_FYELLOW "%s: RX MODE !!!! \n", __FUNCTION__);
     trxstate = MODEM_RX;
@@ -2646,9 +2646,9 @@ void ELECHOUSE_CC1101::EnterRxMode(void)
 void ELECHOUSE_CC1101::EnterRxMode(float mhz)
 {
 	Serial.printf("************* EnterRxMode + FREQ = %f ****\n", mhz);
-    SpiStrobe(CC1101_SIDLE);
+    SpiStrobe(STROBE_SIDLE);
     setMHZ(mhz);
-    SpiStrobe(CC1101_SRX);      //start receive
+    SpiStrobe(STROBE_SRX);      //start receive
     
     Serial.printf(FG_FYELLOW "%s: RX MODE + freq !!!! \n", __FUNCTION__);
     trxstate = MODEM_RX;
@@ -2863,7 +2863,7 @@ byte ELECHOUSE_CC1101::getState(void)
 void ELECHOUSE_CC1101::setSres(void)
 {
     Serial.println("****** chip h/w reset ***\n"); delay(5000);
-    SpiStrobe(CC1101_SRES);
+    SpiStrobe(STROBE_SRES);
     trxstate = MODEM_IDLE;
 }
 
@@ -2876,7 +2876,7 @@ void ELECHOUSE_CC1101::setSres(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::EnterIdleMode(void)
 {
-    SpiStrobe(CC1101_SIDLE);
+    SpiStrobe(STROBE_SIDLE);
     trxstate = MODEM_IDLE;
     
     Serial.printf(FG_FYELLOW "%s: IDLE !!!! \n", __FUNCTION__);
@@ -2892,8 +2892,8 @@ void ELECHOUSE_CC1101::EnterIdleMode(void)
 void ELECHOUSE_CC1101::goSleep(void)
 {
     trxstate = MODEM_IDLE;
-    SpiStrobe(0x36);    //Exit RX / TX, turn off frequency synthesizer and exit
-    SpiStrobe(0x39);    //Enter power down mode when CSn goes high.
+    SpiStrobe(STROBE_SRES);    //Exit RX / TX, turn off frequency synthesizer and exit
+    SpiStrobe(STROBE_SPWD);    //Enter power down mode when CSn goes high.
     
     Serial.printf(FG_FYELLOW "%s: SLEEP !!!! \n", __FUNCTION__);
 }
@@ -2963,13 +2963,13 @@ void ELECHOUSE_CC1101::SendBinaryData(byte *txBuffer, byte size)
 	uint8_t len; 
 	do
 	{
-		len = SpiStrobe(STATUS_TXBYTES);
+		len = SpiReadStatus(STATUS_TXBYTES);
 		Serial.printf("%s len = %d\n", __FUNCTION__, len);
 		delay(1);
 	} while (len);
 	
-    SpiStrobe(CC1101_SIDLE);
-    SpiStrobe(CC1101_STX);      //start send
+    SpiStrobe(STROBE_SIDLE);
+    SpiStrobe(STROBE_STX);      //start send
 
 	uint8_t test = SpiReadReg(CC1101_IOCFG0); 	// is GDO0 in the correct mode?
 	assert (test == 6);
@@ -2979,7 +2979,7 @@ void ELECHOUSE_CC1101::SendBinaryData(byte *txBuffer, byte size)
     while (!digitalRead(GDO0)); // -> sync transmitted
     while ( digitalRead(GDO0)); // -> end of packet
 
-    ///// SpiStrobe(CC1101_SFTX);                 //flush TXfifo
+    ///// SpiStrobe(STROBE_SFTX);                 //flush TXfifo
     trxstate = MODEM_TX;
 }
 
@@ -2996,10 +2996,10 @@ void ELECHOUSE_CC1101::SendBinaryDataWithNoGDO(byte *txBuffer, byte size, int t)
 
     SpiWriteReg(CC1101_TXFIFO, size);
     SpiWriteBurstReg(CC1101_TXFIFO, txBuffer, size);    //write data to send
-    SpiStrobe(CC1101_SIDLE);
-    SpiStrobe(CC1101_STX);                              //start send
+    SpiStrobe(STROBE_SIDLE);
+    SpiStrobe(STROBE_STX);                              //start send
     delay(t);
-    SpiStrobe(CC1101_SFTX);                             //flush TXfifo
+    SpiStrobe(STROBE_SFTX);                             //flush TXfifo
     trxstate = MODEM_TX;
 }
 
@@ -3021,8 +3021,8 @@ bool ELECHOUSE_CC1101::CheckCRC(void)
     }
     else
     {
-        SpiStrobe(CC1101_SFRX);
-        SpiStrobe(CC1101_SRX);
+        SpiStrobe(STROBE_SFRX);
+        SpiStrobe(STROBE_SRX);
         return 0;
     }
 }
@@ -3090,14 +3090,14 @@ byte ELECHOUSE_CC1101::ReceiveData(byte *rxBuffer)
         bytesInQ = SpiReadReg(CC1101_RXFIFO);
         SpiReadBurstReg(CC1101_RXFIFO, rxBuffer, bytesInQ);
         SpiReadBurstReg(CC1101_RXFIFO, status, 2);
-        //SpiStrobe(CC1101_SFRX);
-        //SpiStrobe(CC1101_SRX);
+        //SpiStrobe(STROBE_SFRX);
+        //SpiStrobe(STROBE_SRX);
         return bytesInQ;
     }
     else
     {
-        //SpiStrobe(CC1101_SFRX);  no flush on empty
-        //SpiStrobe(CC1101_SRX);
+        //SpiStrobe(STROBE_SFRX);  no flush on empty
+        //SpiStrobe(STROBE_SRX);
         return 0;
     }
 }

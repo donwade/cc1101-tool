@@ -93,28 +93,35 @@ typedef enum {
 #define CC1101_TEST0        0x2E        // Various test settings
 
 //CC1101 Strobe commands
-#define CC1101_SRES         0x30        // Reset chip.
-#define CC1101_SFSTXON      0x31        // Enable and calibrate frequency synthesizer (if MCSM0.FS_AUTOCAL=1).
-                                        // If in RX/TX: Go to a wait state where only the synthesizer is
-                                        // running (for quick RX / TX turnaround).
-#define CC1101_SXOFF        0x32        // Turn off crystal oscillator.
-#define CC1101_SCAL         0x33        // Calibrate frequency synthesizer and turn it off
+typedef enum STROBES {
+    STROBE_SRES =0x30   ,   // Reset chip.
+    STROBE_SFSTXON      ,   // Enable and calibrate frequency synthesizer (if MCSM0.FS_AUTOCAL=1).
+                            //  RX/TX: Go to a wait state where only the synthesizer is
+                            // running (for quick RX / TX turnaround).
+
+    STROBE_SXOFF        ,   // Turn off crystal oscillator.
+    STROBE_SCAL         ,   // Calibrate frequency synthesizer and turn it off
                                         // (enables quick start).
-#define CC1101_SRX          0x34        // Enable RX. Perform calibration first if coming from IDLE and
+
+    STROBE_SRX          ,   // Enable RX. Perform calibration first if coming from IDLE and
                                         // MCSM0.FS_AUTOCAL=1.
-#define CC1101_STX          0x35        // In IDLE state: Enable TX. Perform calibration first if
+
+    STROBE_STX          ,   // In IDLE state: Enable TX. Perform calibration first if
                                         // MCSM0.FS_AUTOCAL=1. If in RX state and CCA is enabled:
                                         // Only go to TX if channel is clear.
-#define CC1101_SIDLE        0x36        // Exit RX / TX, turn off frequency synthesizer and exit
+    STROBE_SIDLE        ,   // Exit RX / TX, turn off frequency synthesizer and exit
                                         // Wake-On-Radio mode if applicable.
-#define CC1101_SAFC         0x37        // Perform AFC adjustment of the frequency synthesizer
-#define CC1101_SWOR         0x38        // Start automatic RX polling sequence (Wake-on-Radio)
-#define CC1101_SPWD         0x39        // Enter power down mode when CSn goes high.
-#define CC1101_SFRX         0x3A        // Flush the RX FIFO buffer.
-#define CC1101_SFTX         0x3B        // Flush the TX FIFO buffer.
-#define CC1101_SWORRST      0x3C        // Reset real time clock.
-#define CC1101_SNOP         0x3D        // No operation. May be used to pad strobe commands to two
-                                        // INT8Us for simpler software.
+
+    STROBE_SAFC         ,   // Perform AFC adjustment of the frequency synthesizer
+    STROBE_SWOR         ,   // Start automatic RX polling sequence (Wake-on-Radio)
+    STROBE_SPWD         ,   // Enter power down mode when CSn goes high.
+    STROBE_SFRX         ,   // Flush the RX FIFO buffer.
+    STROBE_SFTX         ,   // Flush the TX FIFO buffer.
+    STROBE_SWORRST      ,   // Reset real time clock.
+    STROBE_SNOP             // No operation. May be used to pad strobe commands to two
+                            // INT8Us for simpler software.
+};
+
 //CC1101 STATUS REGSITER
 typedef enum STATUS_REG
 {
@@ -230,7 +237,7 @@ void SendDataCppString(String &txchar);
 byte CheckReceiveFlag(void);
 byte ReceiveData(byte *rxBuffer);
 bool CheckCRC(void);
-uint8_t SpiStrobe(byte strobe);
+uint8_t SpiStrobe(STROBES strobe);
 void _SpiWriteReg(const char*name, byte addr, byte value, bool bQuiet=false);
 void SpiWriteBurstReg(byte addr, byte *buffer, byte num);
 byte SpiReadReg(byte addr);
