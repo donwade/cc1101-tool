@@ -2862,7 +2862,7 @@ byte ELECHOUSE_CC1101::getState(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::setSres(void)
 {
-    Serial.println("****** chip h/w reset ***\n"); delay(5000);
+    Serial.printf("%s: **** chip h/w reset ***\n", __FUNCTION__);delay(5000);
     SpiStrobe(STROBE_SRES);
     trxstate = MODEM_IDLE;
 }
@@ -2964,9 +2964,9 @@ void ELECHOUSE_CC1101::SendBinaryData(byte *txBuffer, byte size)
 	do
 	{
 		len = SpiReadStatus(STATUS_TXBYTES);
-		Serial.printf("%s len = %d\n", __FUNCTION__, len);
-		delay(1);
-	} while (len);
+		Serial.printf("%s tx len in fifo = %d \n", __FUNCTION__, len);
+		assert(len);
+	} while (!len);
 	
     SpiStrobe(STROBE_SIDLE);
     SpiStrobe(STROBE_STX);      //start send
