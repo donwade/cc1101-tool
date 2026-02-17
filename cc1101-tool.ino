@@ -350,7 +350,6 @@ void rxRcvByFifosFsk4(void)
 {
 	byte *rando;  
 
-	ELECHOUSE_cc1101.EnterIdleMode();
 #if 0
 	ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); //4fsk
 	ELECHOUSE_cc1101.setBaudRate(4.8);
@@ -502,7 +501,6 @@ void txSendByFifosFsk4(void)
 {
 	byte *rando;  
 
-	ELECHOUSE_cc1101.EnterIdleMode();
 #if 0
 	ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); //4fsk
 	ELECHOUSE_cc1101.setBaudRate(4.8);
@@ -1073,7 +1071,6 @@ static void exec(char *input)
 		delay(6000);
 		
         // initialize parameters for scanning
-        ELECHOUSE_cc1101.Init();
         ELECHOUSE_cc1101.setRxBW(58);
         ELECHOUSE_cc1101.EnterRxMode();
 
@@ -1083,9 +1080,9 @@ static void exec(char *input)
 
         while (!Serial.available())
         {
-        	Serial.printf("scan freq = %f ", freq);
             ELECHOUSE_cc1101.setMHZ(freq);
-            delay(50);
+            delay(500);
+            
             rssi = ELECHOUSE_cc1101.getRssi();
         	Serial.printf(" rssi = %d\n", rssi);
 
@@ -1879,12 +1876,6 @@ static void exec(char *input)
 
         // Handling ECHO command
     }
-    else if (strcmp_P(arg0, PSTR("offset")) == 0)
-    {
-    	float now = atof(arg1);
-        float orig = ELECHOUSE_cc1101.setOSCdrift(now);
-		Serial.printf(">>> %s : old = %f new = %f\n", arg0, orig, now);
-   }
     else if (strcmp_P(arg0, PSTR("echo")) == 0)
     {
         do_echo = atoi(arg1);
@@ -2066,14 +2057,14 @@ void setup()
     // setup variables
     bigrecordingbufferpos = 0;
 
-    esp_intr_dump(stdout);
+    //esp_intr_dump(stdout);
 }
 
 
 void loop()
 {
 	ArduinoOTA.handle();
-	ELECHOUSE_cc1101.getPktStatus();
+	//ELECHOUSE_cc1101.getPktStatus();
 
 	static bool bFirstTime = true;
 	if (bFirstTime)
@@ -2087,10 +2078,11 @@ void loop()
 		Serial.println("ready");
 		bFirstTime = false;
 
+		ELECHOUSE_cc1101.EnterIdleMode();
+
 #ifndef DNS_YELLOW
 		txSendByFifosFsk4();
 #endif
-	
 
 	}
 	
@@ -2103,190 +2095,115 @@ void loop()
         static char buffer[BUF_LENGTH];
         static int length = 0;
 
-        // handling CHAT MODE
-        if (chatmode == 1)
+        int data = Serial.read();
+
+        if (data == '\b' || data == '\177') // BS and DEL
         {
-
-            // clear serial port buffer index
-            i = 0;
-
-            // something was received over serial port put it into radio sending buffer
-            while (Serial.available() and(i < (CC_FIFOSIZE - 1)))
+            if (length)
             {
-                // read single character from Serial port
-                ccsendingbuffer[i] = Serial.read();
-
-                // also put it as ECHO back to serial port
-                Serial.write(ccsendingbuffer[i]);
-
-                // if CR was received add also LF character and display it on Serial port
-                if (ccsendingbuffer[i] == 0x0d)
-                {
-                    Serial.write(0x0a);
-                    i++;
-                    ccsendingbuffer[i] = 0x0a;
-                }
-
-                //
-
-                // increase CC1101 TX buffer position
-                i++;
-            }
-
-            ;
-
-            // put NULL at the end of CC transmission buffer
-            ccsendingbuffer[i] = '\0';
-
-            // send these data to radio over CC1101
-            ELECHOUSE_cc1101.SendDataCharArray((char *)ccsendingbuffer);
-
-
-        }
-        // handling CLI commands processing
-        else
-        {
-            int data = Serial.read();
-
-            if (data == '\b' || data == '\177') // BS and DEL
-            {
-                if (length)
-                {
-                    length--;
-
-                    if (do_echo)
-                        Serial.write("\b \b");
-                }
-            }
-            else if (data == '\r' || data == '\n')
-            {
-                if (do_echo)
-                    Serial.write("\r\n");         // output CRLF
-
-                buffer[length] = '\0';
-
-                if (length)
-                {
-                	ELECHOUSE_cc1101.EnterIdleMode();
-                    exec(buffer);
-                }
-
-                length = 0;
-            }
-            else if (length < BUF_LENGTH - 1)
-            {
-                buffer[length++] = data;
+                length--;
 
                 if (do_echo)
-                    Serial.write(data);
+                    Serial.write("\b \b");
             }
         }
+        else if (data == '\r' || data == '\n')
+        {
+            if (do_echo)
+                Serial.write("\r\n");         // output CRLF
 
-         // end of handling CLI processing
+            buffer[length] = '\0';
+
+            if (length)
+            {
+                exec(buffer);
+            	ELECHOUSE_cc1101.EnterIdleMode();
+            }
+
+            length = 0;
+        }
+        else if (length < BUF_LENGTH - 1)
+        {
+            buffer[length++] = data;
+
+            if (do_echo)
+                Serial.write(data);
+        }
+        // end of handling CLI processing
 
     }
   
-    /* Process RF received packets */
 
-    //Checks whether something has been received.
-    if (ELECHOUSE_cc1101.CheckReceiveFlag() && (receivingmode == 1 || recordingmode == 1 || chatmode == 1))
-    {
-		Serial.printf("hi don\n");
-        //CRC Check. If "setCrc(false)" crc returns always OK!
-        if (ELECHOUSE_cc1101.CheckCRC())
-        {
-            //Get received Data and calculate length
-            int len = ELECHOUSE_cc1101.ReceiveData(ccreceivingbuffer);
-
-            // Actions for CHAT MODE
-            if ((chatmode == 1) && (len < CC_FIFOSIZE))
-            {
-                // put NULL at the end of char buffer
-                ccreceivingbuffer[len] = '\0';
-                //Print received in char format.
-                Serial.print((char *)ccreceivingbuffer);
-            }
-
-            ;      // end of handling Chat mode
-
-            // Actions for RECEIVNG MODE
-            if (((receivingmode == 1) && (recordingmode == 0)) && (len < CC_FIFOSIZE))
-            {
-                // put NULL at the end of char buffer
-                ccreceivingbuffer[len] = '\0';
-
-                // flush hexBuffer
-                for (int i = 0; i < BUF_LENGTH; i++)
-                    textBuffer[i] = 0;
-
-                ;
-
-                //Print received packet as set of hex values directly
-                // not to loose any data in buffer
-                // asciitohex((byte *)ccreceivingbuffer, (byte *)hexBuffer,  len);
-                binToAscii(ccreceivingbuffer, textBuffer, len);
-                Serial.print((char *)textBuffer);
-                // set RX  mode again
-                ELECHOUSE_cc1101.EnterRxMode();
-            }
-
-            ;        // end of handling receiving mode
-
-            // Actions for RECORDING MODE
-            if (((recordingmode == 1) && (receivingmode == 0)) && (len < CC_FIFOSIZE))
-            {
-                // copy the frame from receiving buffer for replay - only if it fits
-                if ((bigrecordingbufferpos + len + 1) < RECORDINGBUFFERSIZE)
-                {      // put info about number of bytes
-                    bigrecordingbuffer[bigrecordingbufferpos] = len;
-                    bigrecordingbufferpos++;
-                    // next - copy current frame and increase
-                    memcpy(&bigrecordingbuffer[bigrecordingbufferpos], ccreceivingbuffer, len);
-                    // increase position in big recording buffer for next frame
-                    bigrecordingbufferpos = bigrecordingbufferpos + len;
-                    // increase counter of frames stored
-                    framesinbigrecordingbuffer++;
-                    // set RX  mode again
-                    ELECHOUSE_cc1101.EnterRxMode();
-                }
-                else
-                {
-                    Serial.print(F("Recording buffer full! Stopping..\r\nFrames stored: "));
-                    Serial.print(framesinbigrecordingbuffer);
-                    Serial.print(F("\r\n"));
-                    bigrecordingbufferpos = 0;
-                    recordingmode = 0;
-                }
-
-                ;
-
-            }
-
-            ;       // end of handling frame recording mode
-
-        }
-
-        ;      // end of CRC check IF
-
-
-    }
-
-    ;      // end of Check receive flag if
-
-    // if jamming mode activate continously send something over RF...
-    if (jammingmode == 1)
-    {
-        // populate cc1101 sending buffer with random values
-        randomSeed(analogRead(0));
-
-        for (i = 0; i < 60; i++)
-            ccsendingbuffer[i] = (byte)random(255);
-
-        ;
-        // send these data to radio over CC1101
-        ELECHOUSE_cc1101.SendBinaryData(ccsendingbuffer, 60);
-    }
-
-    ;
 
 }  // end of main LOOP
+
+void runRX(void)
+{
+    /* Process RF received packets */
+	while (!Serial.available())
+	{
+	    //Checks whether something has been received.
+	    if (ELECHOUSE_cc1101.CheckReceiveFlag() && (receivingmode == 1 || recordingmode == 1 || chatmode == 1))
+	    {
+			Serial.printf("hi don\n");
+	        //CRC Check. If "setCrc(false)" crc returns always OK!
+	        if (ELECHOUSE_cc1101.CheckCRC())
+	        {
+	            //Get received Data and calculate length
+	            int len = ELECHOUSE_cc1101.ReceiveData(ccreceivingbuffer);
+
+	            // Actions for RECEIVNG MODE
+	            if (((receivingmode == 1) && (recordingmode == 0)) && (len < CC_FIFOSIZE))
+	            {
+	                // put NULL at the end of char buffer
+	                ccreceivingbuffer[len] = '\0';
+
+	                // flush hexBuffer
+	                for (int i = 0; i < BUF_LENGTH; i++)
+	                    textBuffer[i] = 0;
+
+	                ;
+
+	                //Print received packet as set of hex values directly
+	                // not to loose any data in buffer
+	                // asciitohex((byte *)ccreceivingbuffer, (byte *)hexBuffer,  len);
+	                binToAscii(ccreceivingbuffer, textBuffer, len);
+	                Serial.print((char *)textBuffer);
+	                // set RX  mode again
+	                ELECHOUSE_cc1101.EnterRxMode();
+	            }
+
+	            ;        // end of handling receiving mode
+
+	            // Actions for RECORDING MODE
+	            if (((recordingmode == 1) && (receivingmode == 0)) && (len < CC_FIFOSIZE))
+	            {
+	                // copy the frame from receiving buffer for replay - only if it fits
+	                if ((bigrecordingbufferpos + len + 1) < RECORDINGBUFFERSIZE)
+	                {      // put info about number of bytes
+	                    bigrecordingbuffer[bigrecordingbufferpos] = len;
+	                    bigrecordingbufferpos++;
+	                    // next - copy current frame and increase
+	                    memcpy(&bigrecordingbuffer[bigrecordingbufferpos], ccreceivingbuffer, len);
+	                    // increase position in big recording buffer for next frame
+	                    bigrecordingbufferpos = bigrecordingbufferpos + len;
+	                    // increase counter of frames stored
+	                    framesinbigrecordingbuffer++;
+	                    // set RX  mode again
+	                    ELECHOUSE_cc1101.EnterRxMode();
+	                }
+	                else
+	                {
+	                    Serial.print(F("Recording buffer full! Stopping..\r\nFrames stored: "));
+	                    Serial.print(framesinbigrecordingbuffer);
+	                    Serial.print(F("\r\n"));
+	                    bigrecordingbufferpos = 0;
+	                    recordingmode = 0;
+	                }
+	            }
+	        }
+
+	    }
+	}
+	Serial.read();
+}

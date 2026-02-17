@@ -18,6 +18,7 @@
 #include <Arduino.h>
 #include "pretty.h"
 #include <ArduinoOTA.h>
+#include <esp_debug_helpers.h>
 
 extern ArduinoOTAClass ArduinoOTA;
 
@@ -80,8 +81,7 @@ eGDIO_MODES ccmode = NOT_INITED;
 eMODEM_STATE trxstate = MODEM_IDLE;
 
 float gMHz = 905.0;
-float tweakFreqHz =  0;
-
+ 
 byte uPacketHandleMode;
 byte uPacketLenConf;
 
@@ -178,6 +178,7 @@ template <typename T> T regMaskWrite( T &final, T newField, uint8_t lhs, uint8_t
 
 
 #define SpiWriteReg(name, value) _SpiWriteReg(#name, name, value)
+#define SpiWriteRegQ(name, value) _SpiWriteReg(#name, name, value, true)
 #define setField(name, val, lhs, rhs)	_setField(#name, name, (uint8_t)val, lhs, rhs)
 #define getField(name, lhs, rhs) 		_getField(#name, name, lhs, rhs)
 
@@ -475,8 +476,13 @@ bool ELECHOUSE_CC1101::getGDO2(void)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
+static bool doubleTap = false;
+
 void ELECHOUSE_CC1101::Reset(void)
 {
+	if (doubleTap) 	esp_backtrace_print(5);
+	doubleTap = true;
+	
     digitalWrite(SS_PIN, LOW);
     delay(1);
 
@@ -491,9 +497,8 @@ void ELECHOUSE_CC1101::Reset(void)
     Serial.printf(FG_FYELLOW "%s: RESET !!!! \n" _DONE, __FUNCTION__); 
     delay(5000);
 
-	for (int i = 0; i < CC1101_REG_COUNT; i++) mirror[i] = -1;  // 'never written to'
+	for (int i = 0; i < CC1101_REG_COUNT; i++) mirror[i] = SpiReadReg(i);
 
-	DumpMirror("SIMPLE INIT");
 }
 
 void ELECHOUSE_CC1101::DumpMirror(char *msg)
@@ -1438,19 +1443,6 @@ void ELECHOUSE_CC1101::setPA(int needDb)
 }
 
 /****************************************************************
-* FUNCTION NAME:setOSCdrift
-* INPUT        : target miss on freq adj
-****************************************************************/
-float  ELECHOUSE_CC1101::setOSCdrift(float hz)
-{
-	float ret = tweakFreqHz;
-	tweakFreqHz = hz;
-	setMHZ(getMHZ());  	// reload frequency.
-	
-	return ret;
-}
-
-/****************************************************************
 * FUNCTION NAME:Frequency Calculator
 * FUNCTION     :Calculate the basic frequency.
 * INPUT        :none
@@ -1468,17 +1460,14 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 
 	if (mhz == 0.0 ) mhz = gMHz;
 	
+	temp = (( mhz * (float)(1 << 16))/ XTAL_Mhz);
 
-	float adjFreq = mhz + tweakFreqHz/1e6;
+ 	Serial.printf(FG_CYAN "\n%s: tgt=%7.3f\n"  _DONE, 
+ 			__FUNCTION__, mhz);
 	
-	temp = (( adjFreq  * (float)(1 << 16))/ XTAL_Mhz);
-
- 	Serial.printf(FG_CYAN "\n%s: tgt=%7.3f -> %f  (delta = %7.3f)\n"  _DONE, 
- 			__FUNCTION__, mhz, adjFreq, tweakFreqHz);
-	
-	SpiWriteReg(CC1101_FREQ2, (temp >>16) & 0xFF);
-	SpiWriteReg(CC1101_FREQ1, (temp >> 8) & 0xFF);
-	SpiWriteReg(CC1101_FREQ0,  temp       & 0xFF);
+	SpiWriteRegQ(CC1101_FREQ2, (temp >>16) & 0xFF);
+	SpiWriteRegQ(CC1101_FREQ1, (temp >> 8) & 0xFF);
+	SpiWriteRegQ(CC1101_FREQ0,  temp       & 0xFF);
 	
 	gMHz= mhz;
 
@@ -1513,7 +1502,8 @@ void ELECHOUSE_CC1101::Calibrate(void)
 	//CC1101_TEST0 = no clue. Too obtuse.
 
 	const int32_t hzPerStep = (XTAL_Mhz * 1e6)/(float) (1<<14);
-	Serial.printf(FG_GREEN "\n%s hz/step = %d\n" _DONE, __FUNCTION__, hzPerStep); 
+
+	//Serial.printf(FG_GREEN "\n%s hz/step = %d\n" _DONE, __FUNCTION__, hzPerStep); 
 	
 	
     if (gMHz >= 300 && gMHz <= 348)
@@ -1522,19 +1512,19 @@ void ELECHOUSE_CC1101::Calibrate(void)
         int32_t offset =(CC1101_FSCTRL0, map(gMHz, 300, 348, hwTweakHz_300_348Mhz[0], hwTweakHz_300_348Mhz[1]));
 		Serial.printf(FG_GREEN "%s 300->348 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
         
-        SpiWriteReg(CC1101_FSCTRL0, offset / hzPerStep);
+        SpiWriteRegQ(CC1101_FSCTRL0, offset / hzPerStep);
 
         if (gMHz < 322.88)
         {
-            SpiWriteReg(CC1101_TEST0, 0x0B);
+            SpiWriteRegQ(CC1101_TEST0, 0x0B);
         }
         else
         {
-            SpiWriteReg(CC1101_TEST0, 0x09);
+            SpiWriteRegQ(CC1101_TEST0, 0x09);
             int s = ELECHOUSE_cc1101.SpiReadReg(CC1101_FSCAL2);
 
             if (s < 32)
-                SpiWriteReg(CC1101_FSCAL2, s + 32);
+                SpiWriteRegQ(CC1101_FSCAL2, s + 32);
 
             if (paTableNumber != 1)
                 setPA(usrPwrLvlDb);
@@ -1545,19 +1535,19 @@ void ELECHOUSE_CC1101::Calibrate(void)
         int32_t offset =(CC1101_FSCTRL0, map(gMHz, 378, 464, hwTweakHz_378_464Mhz[0], hwTweakHz_378_464Mhz[1]));
 		Serial.printf(FG_GREEN "%s 378->464 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
         
-        SpiWriteReg(CC1101_FSCTRL0, offset / hzPerStep);
+        SpiWriteRegQ(CC1101_FSCTRL0, offset / hzPerStep);
 
         if (gMHz < 430.5)
         {
-            SpiWriteReg(CC1101_TEST0, 0x0B);
+            SpiWriteRegQ(CC1101_TEST0, 0x0B);
         }
         else
         {
-            SpiWriteReg(CC1101_TEST0, 0x09);
+            SpiWriteRegQ(CC1101_TEST0, 0x09);
             int s = ELECHOUSE_cc1101.SpiReadReg(CC1101_FSCAL2);
 
             if (s < 32)
-                SpiWriteReg(CC1101_FSCAL2, s + 32);
+                SpiWriteRegQ(CC1101_FSCAL2, s + 32);
 
             if (paTableNumber != 2)
                 setPA(usrPwrLvlDb);
@@ -1569,19 +1559,19 @@ void ELECHOUSE_CC1101::Calibrate(void)
 		int32_t offset =(CC1101_FSCTRL0, map(gMHz, 779, 899, hwTweakHz_779_899Mhz[0], hwTweakHz_779_899Mhz[1]));
 		Serial.printf(FG_GREEN "%s 779->899 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
 		
-		SpiWriteReg(CC1101_FSCTRL0, offset / hzPerStep);
+		SpiWriteRegQ(CC1101_FSCTRL0, offset / hzPerStep);
 	
         if (gMHz < 861)
         {
-            SpiWriteReg(CC1101_TEST0, 0x0B);
+            SpiWriteRegQ(CC1101_TEST0, 0x0B);
         }
         else
         {
-            SpiWriteReg(CC1101_TEST0, 0x09);
+            SpiWriteRegQ(CC1101_TEST0, 0x09);
             int s = ELECHOUSE_cc1101.SpiReadReg(CC1101_FSCAL2);
 
             if (s < 32)
-                SpiWriteReg(CC1101_FSCAL2, s + 32);
+                SpiWriteRegQ(CC1101_FSCAL2, s + 32);
 
             if (paTableNumber != 3)
                 setPA(usrPwrLvlDb);
@@ -1593,14 +1583,14 @@ void ELECHOUSE_CC1101::Calibrate(void)
 		int32_t offset =(CC1101_FSCTRL0, map(gMHz, 900, 928, hwTweakHz_900_928Mhz[0], hwTweakHz_900_928Mhz[1]));
 		Serial.printf(FG_GREEN "%s 900->928 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
 
-		Serial.printf("note: %d %d\n", offset / hzPerStep,  (uint8_t)( offset / hzPerStep));
-		SpiWriteReg(CC1101_FSCTRL0, (uint8_t)(offset / hzPerStep));
+		//Serial.printf("note: %d %d\n", offset / hzPerStep,  (uint8_t)( offset / hzPerStep));
+		SpiWriteRegQ(CC1101_FSCTRL0, (uint8_t)(offset / hzPerStep));
 		
-        SpiWriteReg(CC1101_TEST0, 0x09);
+        SpiWriteRegQ(CC1101_TEST0, 0x09);
         int s = ELECHOUSE_cc1101.SpiReadReg(CC1101_FSCAL2);
 
         if (s < 32)
-            SpiWriteReg(CC1101_FSCAL2, s + 32);
+            SpiWriteRegQ(CC1101_FSCAL2, s + 32);
 
         if (paTableNumber != 4)
             setPA(usrPwrLvlDb);
@@ -2627,6 +2617,8 @@ void ELECHOUSE_CC1101::EnterTxMode(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::EnterRxMode(void)
 {
+	esp_backtrace_print(5);
+
 	Serial.printf("************** EnterRxMode ****\n");
     SpiStrobe(STROBE_SIDLE);
     SpiStrobe(STROBE_SRX);      //start receive
@@ -2837,7 +2829,7 @@ byte ELECHOUSE_CC1101::getState(void)
     
     uint8_t elem = sizeof(msg)/ sizeof(msg[0]);
 
-    while(true)
+    do
     {
    		status = SpiReadStatus(STATUS_MARCSTATE);
 	    if ( status < elem)
@@ -2850,7 +2842,8 @@ byte ELECHOUSE_CC1101::getState(void)
 			break;
 		}
 		if (!msg[status].bWait2exit) break;
-	}    
+	} while (true);
+	
     return status;
 }
  

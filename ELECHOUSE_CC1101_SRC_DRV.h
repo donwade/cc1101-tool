@@ -211,7 +211,6 @@ bool wait4FallingIRQ_GDO2(void);
 
 
 
-float setOSCdrift(float hz);
 void setLogicalChanNum(byte chnl);
 void setChannelSpacing(float f);
 void setRxBW(float f);
