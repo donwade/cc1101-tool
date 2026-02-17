@@ -161,7 +161,7 @@ void Reset(void);
 void setSpi(void);
 
 void RegConfigSettings(void);
-void Calibrate(void);
+void Calibrate(bool bSilent = true);
 
 public:
 void DumpRegs(void);
@@ -192,7 +192,8 @@ void setRxOffMode(uint8_t type);
 void setTxOffMode(uint8_t type);
 
 
-void setMHZ(float mhz = 0.0);
+void setMHZ(float mhz = 0.0, bool bSilent = true);
+void setFreqHz(uint32_t hz = 0, bool bSilent = true);
 
 float getMHZ(void);
 void setGDOxPinConfig(uint8_t reg, uint8_t value, bool bSilent=false);

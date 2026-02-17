@@ -1054,19 +1054,19 @@ static void exec(char *input)
     {
     	// round down to nearest step size
         nextParam = atof(arg1);
-        uint32_t start = ((nextParam * 1000000.)/ DEFAULT_STEP) * DEFAULT_STEP;
-        nextParam = start/1000000;
+        uint32_t startF = ((nextParam * 1000000.)/ DEFAULT_STEP) * DEFAULT_STEP;
 
         // round up to nearest step size
-        endFreq = atof(arg2);
-		uint32_t end = (((endFreq * 1000000.) + DEFAULT_STEP/2) /DEFAULT_STEP ) * DEFAULT_STEP;
-		endFreq = end/1000000;
-		
+        nextParam = atof(arg2);
+        uint32_t endF =   ((nextParam * 1000000.)/ DEFAULT_STEP) * DEFAULT_STEP;
+
+ 		uint32_t lclFREQ;
+ 		
         Serial.print(F("\r\nScanning frequency range from : "));
-        Serial.print(nextParam);
-        Serial.print(F(" gMHz to "));
-        Serial.print(endFreq);
-        Serial.print(F(" MHz, press any key for stop or wait...\r\n"));
+        Serial.print(startF);
+        Serial.print(F(" to "));
+        Serial.print(endF);
+        Serial.print(F(" press any key for stop or wait...\r\n"));
 
 		delay(6000);
 		
@@ -1076,14 +1076,14 @@ static void exec(char *input)
         ELECHOUSE_cc1101.EnterRxMode();
 
         // Do scanning until some key pressed
-        freq = nextParam;  // start frequency for scanning
+        lclFREQ = startF;  // start frequency for scanning
         mark_rssi = -100;
 
         while (!Serial.available())
         {
         	int hiRssi = -999;
         	
-            ELECHOUSE_cc1101.setMHZ(freq);
+            ELECHOUSE_cc1101.setFreqHz(lclFREQ);
 
             for (int x = 0; x < 10; x++)
             {
@@ -1093,7 +1093,7 @@ static void exec(char *input)
 	        }
 	        rssi = hiRssi;
 	        
-        	Serial.printf(" rssi = %d\n", rssi);
+        	Serial.printf("%d rssi = %d\n", lclFREQ, rssi);
 
             if (rssi > -75)
             {
@@ -1103,11 +1103,11 @@ static void exec(char *input)
                     mark_freq = freq;
                 }
             }
-            freq += (float)DEFAULT_STEP/1000000.0; // 0.01;
+            lclFREQ += DEFAULT_STEP;
 
-            if (freq > endFreq)
+            if (lclFREQ > endF)
             {
-                freq = nextParam;
+                lclFREQ = nextParam;
 
                 if (mark_rssi > -75)
                 {
@@ -1132,6 +1132,10 @@ static void exec(char *input)
                         mark_rssi = -100;
                     }
                }
+               
+               lclFREQ = startF;
+               Serial.println("--------------------------------");
+               
             }
         }
 		Serial.read();

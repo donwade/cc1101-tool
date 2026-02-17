@@ -1453,7 +1453,7 @@ float ELECHOUSE_CC1101::getMHZ(void)
 	return gMHz;
 }
 
-void ELECHOUSE_CC1101::setMHZ(float mhz)
+void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent)
 {
 
    	uint32_t  temp;
@@ -1462,7 +1462,7 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 	
 	temp = (( mhz * (float)(1 << 16))/ XTAL_Mhz);
 
- 	Serial.printf(FG_CYAN "\n%s: tgt=%9.5f\n"  _DONE, 
+ 	if (!bSilent) Serial.printf(FG_CYAN "\n%s: tgt=%9.5f\n"  _DONE, 
  			__FUNCTION__, mhz);
 	
 	SpiWriteRegQ(CC1101_FREQ2, (temp >>16) & 0xFF);
@@ -1488,6 +1488,12 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 #endif
 }
 
+void ELECHOUSE_CC1101::setFreqHz(uint32_t hz, bool bSilent)
+{
+	float pass = (float)hz / 1000000.;
+	setMHZ(pass, bSilent);
+}
+
 
 /****************************************************************
 * FUNCTION NAME:Calibrate
@@ -1495,7 +1501,7 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::Calibrate(void)
+void ELECHOUSE_CC1101::Calibrate(bool bSilent)
 {
 
 	//CC1101_FSCTRL0 = add offset to any setMHZ command BY HARDWARE!
@@ -1510,7 +1516,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
     {
     	
         int32_t offset =(CC1101_FSCTRL0, map(gMHz, 300, 348, hwTweakHz_300_348Mhz[0], hwTweakHz_300_348Mhz[1]));
-		Serial.printf(FG_GREEN "%s 300->348 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
+		if (!bSilent) Serial.printf(FG_GREEN "%s 300->348 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
         
         SpiWriteRegQ(CC1101_FSCTRL0, offset / hzPerStep);
 
@@ -1533,7 +1539,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
     else if (gMHz >= 378 && gMHz <= 464)
     {
         int32_t offset =(CC1101_FSCTRL0, map(gMHz, 378, 464, hwTweakHz_378_464Mhz[0], hwTweakHz_378_464Mhz[1]));
-		Serial.printf(FG_GREEN "%s 378->464 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
+		if (!bSilent) Serial.printf(FG_GREEN "%s 378->464 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
         
         SpiWriteRegQ(CC1101_FSCTRL0, offset / hzPerStep);
 
@@ -1557,7 +1563,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
     {
     
 		int32_t offset =(CC1101_FSCTRL0, map(gMHz, 779, 899, hwTweakHz_779_899Mhz[0], hwTweakHz_779_899Mhz[1]));
-		Serial.printf(FG_GREEN "%s 779->899 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
+		if (!bSilent) Serial.printf(FG_GREEN "%s 779->899 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
 		
 		SpiWriteRegQ(CC1101_FSCTRL0, offset / hzPerStep);
 	
@@ -1581,7 +1587,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
     {
 
 		int32_t offset =(CC1101_FSCTRL0, map(gMHz, 900, 928, hwTweakHz_900_928Mhz[0], hwTweakHz_900_928Mhz[1]));
-		Serial.printf(FG_GREEN "%s 900->928 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
+		if (!bSilent) Serial.printf(FG_GREEN "%s 900->928 a %d hz internal HW offset to %f -> %f \n" _DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
 
 		//Serial.printf("note: %d %d\n", offset / hzPerStep,  (uint8_t)( offset / hzPerStep));
 		SpiWriteRegQ(CC1101_FSCTRL0, (uint8_t)(offset / hzPerStep));
