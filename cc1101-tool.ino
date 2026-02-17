@@ -1084,6 +1084,7 @@ static void exec(char *input)
         	int hiRssi = -999;
         	
             ELECHOUSE_cc1101.setFreqHz(lclFREQ);
+			ELECHOUSE_cc1101.EnterRxMode();
 
             for (int x = 0; x < 10; x++)
             {

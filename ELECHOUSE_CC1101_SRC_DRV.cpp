@@ -656,7 +656,7 @@ ONE okay[] =
 
 
 
-uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBES commandStrobe)
+uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBES commandStrobe, bool bSilent)
 {
     SpiStart();
 	assert(commandStrobe != 0x3B);
@@ -665,7 +665,7 @@ uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBES commandStrobe)
     {
     	if (commandStrobe != okay[i].num) continue;
     	
-		Serial.printf(FG_GREEN "\n%s 0x%0X -> %s\n" _DONE, __FUNCTION__, okay[i].num, okay[i].msg);
+		if(!bSilent) Serial.printf(FG_GREEN "\n%s 0x%0X -> %s\n" _DONE, __FUNCTION__, okay[i].num, okay[i].msg);
     }
 
 	// commands are 0x30 and above. Configurations are 0x2F and below
@@ -685,7 +685,7 @@ uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBES commandStrobe)
     digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
 
-	getState();
+	getState(bSilent);
 	
     SpiEnd();
     return ret;
@@ -2621,18 +2621,18 @@ void ELECHOUSE_CC1101::EnterTxMode(void)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::EnterRxMode(void)
+void ELECHOUSE_CC1101::EnterRxMode(bool bSilent)
 {
-	esp_backtrace_print(5);
+	//esp_backtrace_print(5);
 
-	Serial.printf("************** EnterRxMode ****\n");
+	if(!bSilent) Serial.printf("************** EnterRxMode ****\n");
     SpiStrobe(STROBE_SIDLE);
     SpiStrobe(STROBE_SRX);      //start receive
     
-    Serial.printf(FG_FYELLOW "%s: RX MODE !!!! \n", __FUNCTION__);
+    if(!bSilent) Serial.printf(FG_FYELLOW "%s: RX MODE !!!! \n", __FUNCTION__);
     trxstate = MODEM_RX;
     
-    getState();
+    getState(bSilent);
 }
 
 /****************************************************************
@@ -2641,17 +2641,17 @@ void ELECHOUSE_CC1101::EnterRxMode(void)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::EnterRxMode(float mhz)
+void ELECHOUSE_CC1101::EnterRxMode(float mhz, bool bSilent)
 {
-	Serial.printf("************* EnterRxMode + FREQ = %f ****\n", mhz);
+	if(!bSilent) Serial.printf("************* EnterRxMode + FREQ = %f ****\n", mhz);
     SpiStrobe(STROBE_SIDLE);
-    setMHZ(mhz);
+    setMHZ(mhz, bSilent);
     SpiStrobe(STROBE_SRX);      //start receive
     
-    Serial.printf(FG_FYELLOW "%s: RX MODE + freq !!!! \n", __FUNCTION__);
+    if(!bSilent) Serial.printf(FG_FYELLOW "%s: RX MODE + freq !!!! \n", __FUNCTION__);
     trxstate = MODEM_RX;
     
-    getState();
+    getState(bSilent);
 }
 
 
@@ -2803,7 +2803,7 @@ typedef struct PAIR
     char *right;
 };
 
-byte ELECHOUSE_CC1101::getState(void)
+byte ELECHOUSE_CC1101::getState(bool bSilent)
 {
 	byte status;
 	static const PAIR msg[] = 
@@ -2840,11 +2840,11 @@ byte ELECHOUSE_CC1101::getState(void)
    		status = SpiReadStatus(STATUS_MARCSTATE);
 	    if ( status < elem)
 	    {
-			Serial.printf(FG_GREEN "%s:  %d = %s\n", __FUNCTION__, status, msg[ status].right);
+			if(!bSilent) Serial.printf(FG_GREEN "%s:  %d = %s\n", __FUNCTION__, status, msg[ status].right);
 		}
 		else
 		{
-			Serial.printf(FG_GREEN "%s:  unknown %d\n", __FUNCTION__, status);
+			if(!bSilent) Serial.printf(FG_GREEN "%s:  unknown %d\n", __FUNCTION__, status);
 			break;
 		}
 		if (!msg[status].bWait2exit) break;
