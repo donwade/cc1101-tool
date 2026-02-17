@@ -1072,6 +1072,7 @@ static void exec(char *input)
 		
         // initialize parameters for scanning
         ELECHOUSE_cc1101.setRxBW(58);
+        ELECHOUSE_cc1101.setModulation(2); //ook I want amplitude
         ELECHOUSE_cc1101.EnterRxMode();
 
         // Do scanning until some key pressed
@@ -1080,10 +1081,18 @@ static void exec(char *input)
 
         while (!Serial.available())
         {
+        	int hiRssi = -999;
+        	
             ELECHOUSE_cc1101.setMHZ(freq);
-            delay(500);
-            
-            rssi = ELECHOUSE_cc1101.getRssi();
+
+            for (int x = 0; x < 10; x++)
+            {
+	            rssi = ELECHOUSE_cc1101.getRssi();
+	            delay(50);
+	            if (rssi > hiRssi) hiRssi = rssi;
+	        }
+	        rssi = hiRssi;
+	        
         	Serial.printf(" rssi = %d\n", rssi);
 
             if (rssi > -75)

@@ -1462,7 +1462,7 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 	
 	temp = (( mhz * (float)(1 << 16))/ XTAL_Mhz);
 
- 	Serial.printf(FG_CYAN "\n%s: tgt=%7.3f\n"  _DONE, 
+ 	Serial.printf(FG_CYAN "\n%s: tgt=%9.5f\n"  _DONE, 
  			__FUNCTION__, mhz);
 	
 	SpiWriteRegQ(CC1101_FREQ2, (temp >>16) & 0xFF);
