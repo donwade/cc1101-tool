@@ -185,19 +185,19 @@ template <typename T> T regMaskWrite( T &final, T newField, uint8_t lhs, uint8_t
 
 //---------------------------------------------------------------------
 
-// dont read reg 0x30 onwards. those are commands, they don't have addr/data. addr triggers ops!
+// dont read reg 0x30 onwards. most arecommands, they don't have addr/data. addr triggers ops!
 
 #define CC1101_REG_COUNT 0x2F  
 
 
-static uint8_t snap1[CC1101_REG_COUNT];
-static uint8_t snap2[CC1101_REG_COUNT];
+static uint8_t refSnap[CC1101_REG_COUNT];
+static uint8_t curSnap[CC1101_REG_COUNT];
 
 void ELECHOUSE_CC1101::snapshot1(void)
 {
 	for (uint8_t i = 0; i < CC1101_REG_COUNT; i++)
 	{
-		snap1[i] = SpiReadReg(i);
+		refSnap[i] = SpiReadReg((CONFIG_REG)i);
 	}
 }
 
@@ -205,7 +205,7 @@ void ELECHOUSE_CC1101::snapshot2(void)
 {
 	for (uint8_t i = 0; i < CC1101_REG_COUNT; i++)
 	{
-		snap2[i] = SpiReadReg(i);
+		curSnap[i] = SpiReadReg((CONFIG_REG)i);
 	}
 }
 
@@ -214,18 +214,20 @@ void ELECHOUSE_CC1101::diffSnapshots(void)
 	Serial.printf(FG_MAGENTA "\n\n%s  ---------------start ------\n", __FUNCTION__);
 	for (uint8_t i = 0; i < CC1101_REG_COUNT; i++)
 	{
-		if (snap2[i] == snap1[i]) continue;
-		Serial.printf("[0x%2X]\t0x%02X   ",i, snap1[i]); 
-		binary(snap1[i]); 
+		if (curSnap[i] == refSnap[i]) continue;
+		Serial.printf("[0x%2X]\t0x%02X   ",i, refSnap[i]); 
+		binary(refSnap[i]); 
 		Serial.println();
 		
-		Serial.printf("\t0x%02X   ", snap2[i]); 
-		binary(snap2[i]); 
+		Serial.printf("\t0x%02X   ", curSnap[i]); 
+		binary(curSnap[i]); 
 		Serial.println();
 		
-		Serial.printf("\t       "); binary( (uint8_t) (snap1[i] ^ snap2[i]) );	Serial.println();
+		Serial.printf("\t       "); binary( (uint8_t) (refSnap[i] ^ curSnap[i]) );	Serial.println();
 		Serial.printf("\t        76543210\n\n");
 	}
+	*refSnap = *curSnap;
+	
 	Serial.printf(" ------------------ done " _DONE);
 }
 
@@ -234,7 +236,7 @@ void ELECHOUSE_CC1101::diffSnapshots(void)
 
 uint8_t ELECHOUSE_CC1101::_getField(const char *regName, uint8_t regNum, uint8_t LHS, uint8_t RHS)
 {
-	uint8_t orig = SpiReadReg(regNum);
+	uint8_t orig = SpiReadReg((CONFIG_REG)regNum);
 	
 	uint8_t found = regMaskRead<uint8_t> ( orig, LHS, RHS);
 
@@ -247,7 +249,7 @@ uint8_t ELECHOUSE_CC1101::_getField(const char *regName, uint8_t regNum, uint8_t
 
 void ELECHOUSE_CC1101::_setField(const char *regName, uint8_t regNum, uint8_t value, uint8_t LHS, uint8_t RHS)
 {
-	uint8_t regNow = SpiReadReg(regNum);
+	uint8_t regNow = SpiReadReg((CONFIG_REG) regNum);
 	
 	if ( mirror[regNum] >= 0) // has been written to before?
 	{
@@ -277,7 +279,7 @@ void ELECHOUSE_CC1101::_setField(const char *regName, uint8_t regNum, uint8_t va
 		for (x = 0; x < 10; x++)
 		{
 			_SpiWriteReg(regName, regNum, want, 1); //silent
-			regNow = SpiReadReg(regNum);
+			regNow = SpiReadReg((CONFIG_REG) regNum);
 			if (regNow == want) break;
 		}
 		
@@ -307,7 +309,7 @@ void ELECHOUSE_CC1101::DumpRegs(void)
 	
 	for (regs = 0 ; regs < 0x30; regs++)
 	{	
-		uint8_t read = SpiReadReg(regs);
+		uint8_t read = SpiReadReg((CONFIG_REG) regs);
 		Serial.printf("\t0x%02X    0x%02X  ", regs, read);
 		binary(read);
 		Serial.println();
@@ -497,7 +499,7 @@ void ELECHOUSE_CC1101::Reset(void)
     Serial.printf(FG_FYELLOW "%s: RESET !!!! \n" _DONE, __FUNCTION__); 
     delay(5000);
 
-	for (int i = 0; i < CC1101_REG_COUNT; i++) mirror[i] = SpiReadReg(i);
+	for (int i = 0; i < CC1101_REG_COUNT; i++) mirror[i] = (uint8_t) SpiReadReg((CONFIG_REG)i);
 
 }
 
@@ -505,9 +507,9 @@ void ELECHOUSE_CC1101::DumpMirror(char *msg)
 {
     Serial.printf(FG_FYELLOW "%s: %s \n" _DONE, __FUNCTION__, msg);
 	
-	for (int i = 0; i < CC1101_REG_COUNT; i++) 
+	for (uint8_t i = CC1101_IOCFG2; i < CC1101_REG_COUNT; i++) 
 	{
-		uint8_t regNow = SpiReadReg(i);
+		uint8_t regNow = SpiReadReg((CONFIG_REG)i);
 		Serial.printf("\t [0x%02X] 0x%8X   0x%2X\n", i, mirror[i], regNow);
 	}
 	
@@ -550,7 +552,7 @@ void ELECHOUSE_CC1101::Init(void)
 * INPUT        :addr: register address; value: register value
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value, bool bQuiet)
+void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , uint8_t addr, byte value, bool bQuiet)
 {
     SpiStart();
 
@@ -589,7 +591,7 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value, boo
 * INPUT        :addr: register address; buffer:register value array; num:number to write
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::SpiWriteBurstReg(byte addr, byte *buffer, byte num)
+void ELECHOUSE_CC1101::SpiWriteBurstReg(CONFIG_REG addr, byte *buffer, byte num)
 {
     byte i, temp;
 
@@ -659,7 +661,11 @@ ONE okay[] =
 uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBES commandStrobe, bool bSilent)
 {
     SpiStart();
-	assert(commandStrobe != 0x3B);
+
+	// commands are 0x30 and above. Configurations are 0x2F and below
+
+	assert(commandStrobe >= STROBE_SRES && commandStrobe <= STROBE_SNOP);
+	assert(STROBE_SNOP == 0x3D);  // table test.
 	
     for (int i = 0; i < sizeof(okay)/sizeof(okay[0]); i++)
     {
@@ -668,9 +674,6 @@ uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBES commandStrobe, bool bSilent)
 		if(!bSilent) Serial.printf(FG_GREEN "\n%s 0x%0X -> %s\n" _DONE, __FUNCTION__, okay[i].num, okay[i].msg);
     }
 
-	// commands are 0x30 and above. Configurations are 0x2F and below
-	assert(commandStrobe > 0x2F);
-	
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
@@ -698,7 +701,7 @@ uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBES commandStrobe, bool bSilent)
 * INPUT        :addr: register address
 * OUTPUT       :register value
 ****************************************************************/
-byte ELECHOUSE_CC1101::SpiReadReg(byte addr)
+byte ELECHOUSE_CC1101::SpiReadReg(CONFIG_REG addr)
 {
     byte temp, value;
 
@@ -729,7 +732,7 @@ byte ELECHOUSE_CC1101::SpiReadReg(byte addr)
 * INPUT        :addr: register address; buffer:array to store register value; num: number to read
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::SpiReadBurstReg(byte addr, byte *buffer, byte num)
+void ELECHOUSE_CC1101::SpiReadBurstReg(CONFIG_REG addr, byte *buffer, byte num)
 {
     byte i, temp;
 
@@ -1143,23 +1146,23 @@ PIN_DEF pin_defs[] =
 
 
 //------------------
-void ELECHOUSE_CC1101::setGDOxPinConfig(uint8_t pinRegNum, uint8_t value, bool bSilent)
+void ELECHOUSE_CC1101::setGDOxPinConfig(CONFIG_REG regNum, uint8_t value, bool bSilent)
 {
 	int i;
 	uint8_t end = sizeof(pin_defs)/sizeof(pin_defs[0]);
 
-	assert(CC1101_IOCFG2 == pinRegNum || CC1101_IOCFG0 == pinRegNum);
+	assert(CC1101_IOCFG2 == regNum || CC1101_IOCFG0 == regNum);
 
 	for (i = 0; i < end; i++)
 	{
 		if (pin_defs[i].opcode != value) continue;
-		if (!bSilent) Serial.printf(FG_BCYAN "\n%s [0x%02X] %s\n" _DONE, pinRegNum == CC1101_IOCFG2 ? "GDO2":"GDO0", value, pin_defs[i].msg);
+		if (!bSilent) Serial.printf(FG_BCYAN "\n%s [0x%02X] %s\n" _DONE, regNum == CC1101_IOCFG2 ? "GDO2":"GDO0", value, pin_defs[i].msg);
 		break;
 	}
 	
-	if (i == end) Serial.printf(FG_BCYAN "\n%s ERROR ?? [0x%02X] %s\n" _DONE, pinRegNum , value, "see documentation"); 
+	if (i == end) Serial.printf(FG_BCYAN "\n%s ERROR ?? [0x%02X] %s\n" _DONE, regNum , value, "see documentation"); 
 	
-	_SpiWriteReg("CC1101_IOCFGx", pinRegNum, value, 1);  //silent please.
+	_SpiWriteReg("CC1101_IOCFGx", regNum, value, 1);  //silent please.
 
 	
 }
@@ -2626,6 +2629,8 @@ void ELECHOUSE_CC1101::EnterRxMode(bool bSilent)
 	//esp_backtrace_print(5);
 
 	if(!bSilent) Serial.printf("************** EnterRxMode ****\n");
+	EnterIdleMode(bSilent);
+	
     SpiStrobe(STROBE_SIDLE);
     SpiStrobe(STROBE_SRX);      //start receive
     
@@ -2644,7 +2649,7 @@ void ELECHOUSE_CC1101::EnterRxMode(bool bSilent)
 void ELECHOUSE_CC1101::EnterRxMode(float mhz, bool bSilent)
 {
 	if(!bSilent) Serial.printf("************* EnterRxMode + FREQ = %f ****\n", mhz);
-    SpiStrobe(STROBE_SIDLE);
+	EnterIdleMode(bSilent);
     setMHZ(mhz, bSilent);
     SpiStrobe(STROBE_SRX);      //start receive
     
@@ -2689,16 +2694,16 @@ uint8_t bCCA;
 uint8_t bGDO2;
 uint8_t bGDO0;
 
-int ELECHOUSE_CC1101::getPktStatus(void)
+int ELECHOUSE_CC1101::getPktStatus(bool bOnlyOnChange)
 {
-	static int16_t last = -1;
+	static uint8_t last = -1;
 	static uint32_t lastTime;
 
 	uint32_t now = millis();
 	uint32_t delta = now - lastTime;
 	lastTime = now;
 	
-	uint8_t orig= SpiReadReg(STATUS_PKTSTATUS);
+	uint8_t orig= SpiReadStatus(STATUS_PKTSTATUS);
 	
 	bCarrierSense 	= regMaskRead <uint8_t> ( orig, 6, 6);
 	bPQTpass 		= regMaskRead <uint8_t> ( orig, 5, 5);
@@ -2707,20 +2712,11 @@ int ELECHOUSE_CC1101::getPktStatus(void)
 	bGDO2 			= regMaskRead <uint8_t> ( orig, 2, 2);
 	bGDO0 			= regMaskRead <uint8_t> ( orig, 0, 0);
 
-	if (last != orig)
+	if (last != orig || !bOnlyOnChange)
 	{
 		last = orig;
 		Serial.printf("T=%10d CarrierSense=%d PreambleQuality=%d ClearChannelAssmt=%d SyncOrPakt=%d RSSI=%3d\n", 
 				delta, bCarrierSense, bPQTpass, bCCA, bSyncNpacket, getRssi());
-	}
-
-	static int lastRssi;
-	int rssi = getRssi();
-	if (rssi > lastRssi )
-	{
-		lastRssi = rssi + 10;
-		Serial.printf("T=%10d CarrierSense=%d PreambleQuality=%d ClearChannelAssmt=%d SyncOrPakt=%d RSSI=%3d\n", 
-				delta, bCarrierSense, bPQTpass, bCCA, bSyncNpacket, rssi);
 	}
 
     return orig;
@@ -2873,13 +2869,13 @@ void ELECHOUSE_CC1101::setSres(void)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::EnterIdleMode(void)
+void ELECHOUSE_CC1101::EnterIdleMode(bool bSilent)
 {
     SpiStrobe(STROBE_SIDLE);
     trxstate = MODEM_IDLE;
     
-    Serial.printf(FG_FYELLOW "%s: IDLE !!!! \n", __FUNCTION__);
-    getState();
+    if (!bSilent) Serial.printf(FG_FYELLOW "%s: IDLE !!!! \n", __FUNCTION__);
+    getState(bSilent);
 }
 
 /****************************************************************
@@ -2947,16 +2943,16 @@ void ELECHOUSE_CC1101::SendBinaryData(byte *txBuffer, byte size)
 	bDebugWTF = true;
 
 	// first byte in to tx is the size!
-    _SpiWriteReg("CC1101_TXFIFO", CC1101_TXFIFO, size, true);
+    _SpiWriteReg("CC1101_RXTXFIFO", CC1101_RXTXFIFO, size, true);
 
 
 #if 0
-	for (int i = 0; i < size; i++) _SpiWriteReg("CC1101_TXFIFO", CC1101_TXFIFO, txBuffer[i], true);
+	for (int i = 0; i < size; i++) _SpiWriteReg("CC1101_RXTXFIFO", CC1101_RXTXFIFO, txBuffer[i], true);
 
 	Serial.printf("%s: NOT USING BURST MODE on TX\n", __FUNCTION__);
 	// all following bytes are sent off.
 #else	
-    SpiWriteBurstReg(CC1101_TXFIFO, txBuffer, size);    //write data to send
+    SpiWriteBurstReg(CC1101_RXTXFIFO, txBuffer, size);    //write data to send
 #endif
 
 	uint8_t len; 
@@ -2993,8 +2989,8 @@ void ELECHOUSE_CC1101::SendBinaryDataWithNoGDO(byte *txBuffer, byte size, int t)
 {
 	if (gMHz > 866 && gMHz < 868) Serial.printf("*****  DANGER TX FREQ = %f\n", gMHz);
 
-    SpiWriteReg(CC1101_TXFIFO, size);
-    SpiWriteBurstReg(CC1101_TXFIFO, txBuffer, size);    //write data to send
+    SpiWriteReg(CC1101_RXTXFIFO, size);
+    SpiWriteBurstReg(CC1101_RXTXFIFO, txBuffer, size);    //write data to send
     SpiStrobe(STROBE_SIDLE);
     SpiStrobe(STROBE_STX);                              //start send
     delay(t);
@@ -3086,9 +3082,9 @@ byte ELECHOUSE_CC1101::ReceiveData(byte *rxBuffer)
 
     if (SpiReadStatus(STATUS_RXBYTES) & MASK_GETBYTES_FIFO)
     {
-        bytesInQ = SpiReadReg(CC1101_RXFIFO);
-        SpiReadBurstReg(CC1101_RXFIFO, rxBuffer, bytesInQ);
-        SpiReadBurstReg(CC1101_RXFIFO, status, 2);
+        bytesInQ = SpiReadReg(CC1101_RXTXFIFO);
+        SpiReadBurstReg(CC1101_RXTXFIFO, rxBuffer, bytesInQ);
+        SpiReadBurstReg(CC1101_RXTXFIFO, status, 2);
         //SpiStrobe(STROBE_SFRX);
         //SpiStrobe(STROBE_SRX);
         return bytesInQ;

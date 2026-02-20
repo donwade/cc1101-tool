@@ -46,7 +46,7 @@ const char *password = MY_SSID_PASSWORD;
 #define EPROMSIZE 512               // Size of EEPROM in your Arduino chip. For ESP32 it is Flash simulated so very slow
 #define BUF_LENGTH 128              // Buffer for the incoming command.
 
-#define DEFAULT_TxFREQ  905.  //867.010  //905. //866.9375     //866.8875 	//866.9625   // 905
+#define DEFAULT_TxFREQ  928.2  //867.010  //905. //866.9375     //866.8875 	//866.9625   // 905
 
 #define DEFAULT_RxFREQ 867.38751
 
@@ -337,7 +337,7 @@ static void cc1101initialize(void)
 	ELECHOUSE_cc1101.setMAGNTarget(33);
 	
 	ELECHOUSE_cc1101.setCCAmode(0);
-	ELECHOUSE_cc1101.setRxOffMode(3);
+	ELECHOUSE_cc1101.setRxOffMode(0);
 	ELECHOUSE_cc1101.setTxOffMode(0);
 	
 	Serial.println("==================================================");
@@ -384,7 +384,7 @@ void rxRcvByFifosFsk4(void)
 		pin0_old = ELECHOUSE_cc1101.getGDO0();
 	}
 	
-	ELECHOUSE_cc1101.SpiReadReg(STROBE_SFRX); // flush the rx fifo.
+	ELECHOUSE_cc1101.SpiStrobe(STROBE_SFRX); // flush the rx fifo.
 	
 	pin2_old = ELECHOUSE_cc1101.getGDO2();
 	
@@ -424,7 +424,7 @@ void rxRcvByFifosFsk4(void)
 				// keep read and store ... but not the last byte.
 			    if (rxIndex < MAX_SIZE)
 			    {
-			    	rxArray[rxIndex++] = ELECHOUSE_cc1101.SpiReadReg(CC1101_RXFIFO);
+			    	rxArray[rxIndex++] = ELECHOUSE_cc1101.SpiReadReg(CC1101_RXTXFIFO);
 					rx_cnt = ELECHOUSE_cc1101.SpiReadStatus(STATUS_RXBYTES) & MASK_GETBYTES_FIFO;
 					Serial.printf("rxFifo = %d\n", rx_cnt);
 			    }
@@ -445,7 +445,7 @@ void rxRcvByFifosFsk4(void)
 			    // keep read and store
 			    if (rxIndex < MAX_SIZE)
 			    {
-			    	rxArray[rxIndex++] = ELECHOUSE_cc1101.SpiReadReg(CC1101_RXFIFO);
+			    	rxArray[rxIndex++] = ELECHOUSE_cc1101.SpiReadReg(CC1101_RXTXFIFO);
 			    }
 			}			
 			Serial.printf("HI MOM %d bytes found \n", rxIndex);
@@ -1068,31 +1068,40 @@ static void exec(char *input)
         Serial.print(endF);
         Serial.print(F(" press any key for stop or wait...\r\n"));
 
-		delay(6000);
+		delay(4000);
 		
         // initialize parameters for scanning
+        ELECHOUSE_cc1101.EnterIdleMode();
         ELECHOUSE_cc1101.setRxBW(58);
         ELECHOUSE_cc1101.setModulation(2); //ook I want amplitude
-        ELECHOUSE_cc1101.EnterRxMode();
+		ELECHOUSE_cc1101.setPQT(0);  // disable preamble counter.
+		ELECHOUSE_cc1101.setCrc(0); 	// no crc checking.
+        
+		ELECHOUSE_cc1101.setSyncWord(0,0);
+		ELECHOUSE_cc1101.setSyncMode(0); // expect no sync, rssi free runs
 
         // Do scanning until some key pressed
         lclFREQ = startF;  // start frequency for scanning
         mark_rssi = -100;
 
+		ELECHOUSE_cc1101.getPktStatus();
+		
         while (!Serial.available())
         {
         	int hiRssi = -999;
-        	
             ELECHOUSE_cc1101.setFreqHz(lclFREQ);
-			ELECHOUSE_cc1101.EnterRxMode();
+			ELECHOUSE_cc1101.EnterRxMode(false);
+			delay(1);
 
-            for (int x = 0; x < 10; x++)
+            for (int x = 0; x < 500; x++)
             {
 	            rssi = ELECHOUSE_cc1101.getRssi();
-	            delay(50);
+	            delay(1);
 	            if (rssi > hiRssi) hiRssi = rssi;
 	        }
 	        rssi = hiRssi;
+
+			ELECHOUSE_cc1101.getPktStatus();
 	        
         	Serial.printf("%d rssi = %d\n", lclFREQ, rssi);
 
@@ -1136,6 +1145,7 @@ static void exec(char *input)
                
                lclFREQ = startF;
                Serial.println("--------------------------------");
+			   ELECHOUSE_cc1101.getPktStatus();
                
             }
         }
@@ -1322,7 +1332,7 @@ static void exec(char *input)
 		ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);  //gdO = SYNC+Sent
 		ELECHOUSE_cc1101.setModulation(2); //ook
 		ELECHOUSE_cc1101.setBaudRate(300);
-		ELECHOUSE_cc1101.setMHZ();
+		ELECHOUSE_cc1101.setMHZ(DEFAULT_TxFREQ, false);
 		ELECHOUSE_cc1101.setPA(-30);
 		
 		Serial.println("wait for 5 seconds");
@@ -1358,7 +1368,7 @@ static void exec(char *input)
 		ELECHOUSE_cc1101.EnterIdleMode();
 		ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); //4fsk
 		ELECHOUSE_cc1101.setBaudRate(DEFAULT_BAUD);
-		ELECHOUSE_cc1101.setPA(0);
+		ELECHOUSE_cc1101.setPA(-10);
     
     }
 
