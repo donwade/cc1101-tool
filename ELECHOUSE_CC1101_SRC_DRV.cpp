@@ -665,13 +665,14 @@ uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBES commandStrobe, bool bSilent)
 	// commands are 0x30 and above. Configurations are 0x2F and below
 
 	assert(commandStrobe >= STROBE_SRES && commandStrobe <= STROBE_SNOP);
-	assert(STROBE_SNOP == 0x3D);  // table test.
+	//assert(STROBE_SNOP == 0x3D);  // table test.
 	
     for (int i = 0; i < sizeof(okay)/sizeof(okay[0]); i++)
     {
     	if (commandStrobe != okay[i].num) continue;
     	
 		if(!bSilent) Serial.printf(FG_GREEN "\n%s 0x%0X -> %s\n" _DONE, __FUNCTION__, okay[i].num, okay[i].msg);
+		break;
     }
 
     digitalWrite(SS_PIN, LOW);
@@ -688,7 +689,7 @@ uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBES commandStrobe, bool bSilent)
     digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
 
-	getState(bSilent);
+	getMSMState(bSilent);
 	
     SpiEnd();
     return ret;
@@ -2602,9 +2603,9 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::EnterTxMode(void)
+void ELECHOUSE_CC1101::StartTransmitter(void)
 {
-	Serial.printf("************* Enter tx mode \n");
+	Serial.printf("************* StartTransmitter\n");
     SpiStrobe(STROBE_SIDLE);
     setMHZ(gMHz);
     
@@ -2614,7 +2615,8 @@ void ELECHOUSE_CC1101::EnterTxMode(void)
     trxstate = MODEM_TX;
 
     
-    getState();
+    getMSMState(false);
+    getState(false);
 }
 
 
@@ -2637,7 +2639,7 @@ void ELECHOUSE_CC1101::EnterRxMode(bool bSilent)
     if(!bSilent) Serial.printf(FG_FYELLOW "%s: RX MODE !!!! \n", __FUNCTION__);
     trxstate = MODEM_RX;
     
-    getState(bSilent);
+    getMSMState(bSilent);
 }
 
 /****************************************************************
@@ -2656,7 +2658,7 @@ void ELECHOUSE_CC1101::EnterRxMode(float mhz, bool bSilent)
     if(!bSilent) Serial.printf(FG_FYELLOW "%s: RX MODE + freq !!!! \n", __FUNCTION__);
     trxstate = MODEM_RX;
     
-    getState(bSilent);
+    getMSMState(bSilent);
 }
 
 
@@ -2681,6 +2683,24 @@ int ELECHOUSE_CC1101::getRssi(void)
 }
 
 
+
+
+/****************************************************************
+* FUNCTION NAME:getErrorCarrier 
+* FUNCTION     :How far from the center carrier are
+* INPUT        :none
+* OUTPUT       :none
+****************************************************************/
+const float DELTA_STEP = (XTAL_Hz/(float)(1 << 14));
+
+int ELECHOUSE_CC1101::getErrorCarrier(void)
+{
+    int reg;
+    reg = SpiReadStatus(STATUS_FREQEST);
+
+	float dHertz = (float) reg * DELTA_STEP;
+    return dHertz;
+}
 
 /****************************************************************
 * FUNCTION NAME:getPktStatus Level
@@ -2715,8 +2735,8 @@ int ELECHOUSE_CC1101::getPktStatus(bool bOnlyOnChange)
 	if (last != orig || !bOnlyOnChange)
 	{
 		last = orig;
-		Serial.printf("T=%10d CarrierSense=%d PreambleQuality=%d ClearChannelAssmt=%d SyncOrPakt=%d RSSI=%3d\n", 
-				delta, bCarrierSense, bPQTpass, bCCA, bSyncNpacket, getRssi());
+		Serial.printf("T=%10d CarrierSense=%d PreambleQuality=%d ClearChannelAssmt=%d SyncOrPakt=%d RSSI=%3d Fdelta=%d\n", 
+				delta, bCarrierSense, bPQTpass, bCCA, bSyncNpacket, getRssi(), getErrorCarrier());
 	}
 
     return orig;
@@ -2799,7 +2819,67 @@ typedef struct PAIR
     char *right;
 };
 
+uint8_t gStatus;
+uint8_t gFifoLvl;
+
 byte ELECHOUSE_CC1101::getState(bool bSilent)
+{
+	// get generic state of machine.
+/*
+	Value	State	Description
+	000	IDLE		IDLE
+	001 RX		 	Receive mode
+    010 TX			Transmit mode
+	011 FSTXON		Fast TX ready
+	100 CALIBRATE	Frequency synthesizer calibration is running
+	101 SETTLING	PLL is settling
+	110 RXFIFO_OVERFLOW	 RX FIFO has overflowed. Read out any useful data, then flush the FIFO with SFRX
+	111	TXFIFO_UNDERFLOW TX FIFO has underflowed. Acknowledge with SFTX
+*/	
+	static const char *msg[] = { "RX", "TX", "FSTXON", "CAL", "PLL", "RxOFLOW", "TxOFLOW" };
+	static uint8_t lastStatus = 0xFF;
+	
+	uint8_t reg = SpiStrobe(STROBE_SNOP, false);
+
+	gStatus = regMaskRead<uint8_t> (reg, 6, 4);
+	gFifoLvl = regMaskRead<uint8_t> (reg, 3, 0);
+
+	//if (gStatus == lastStatus) return gStatus;
+	lastStatus = gStatus;
+	
+	if (gStatus == 6)
+	{
+		//rx overflow
+		while (true)
+		{
+			// read fifo until mt as per doc.
+			uint8_t toss = SpiReadReg(CC1101_RXTXFIFO);
+			reg = SpiStrobe(STROBE_SNOP);
+			gStatus = regMaskRead<uint8_t> (reg, 6, 4);
+			gFifoLvl = regMaskRead<uint8_t> (reg, 3, 0);
+			if(!gFifoLvl)
+			{
+		
+				SpiStrobe(STROBE_SFRX);
+				break;
+			}
+			Serial.printf("rx flushing %d\n", gFifoLvl);
+		} 
+		SpiStrobe(STROBE_SFRX);
+	}
+	else if (gStatus == 7)
+	{
+		// tx overflow
+		Serial.printf("tx flushed %d\n", gFifoLvl);
+		SpiStrobe(STROBE_SFTX);
+	}
+	
+	Serial.printf(FG_CYAN "%s: status = %d [%s]\n" _DONE , __FUNCTION__, gStatus, msg[gStatus]);
+
+	return gStatus;
+}
+
+byte ELECHOUSE_CC1101::getMSMState(bool bSilent)
 {
 	byte status;
 	static const PAIR msg[] = 
@@ -2875,6 +2955,7 @@ void ELECHOUSE_CC1101::EnterIdleMode(bool bSilent)
     trxstate = MODEM_IDLE;
     
     if (!bSilent) Serial.printf(FG_FYELLOW "%s: IDLE !!!! \n", __FUNCTION__);
+    getMSMState(bSilent);
     getState(bSilent);
 }
 
@@ -2963,8 +3044,7 @@ void ELECHOUSE_CC1101::SendBinaryData(byte *txBuffer, byte size)
 		assert(len);
 	} while (!len);
 	
-    SpiStrobe(STROBE_SIDLE);
-    SpiStrobe(STROBE_STX);      //start send
+    StartTransmitter();
 
 	uint8_t test = SpiReadReg(CC1101_IOCFG0); 	// is GDO0 in the correct mode?
 	assert (test == 6);
@@ -2992,8 +3072,10 @@ void ELECHOUSE_CC1101::SendBinaryDataWithNoGDO(byte *txBuffer, byte size, int t)
     SpiWriteReg(CC1101_RXTXFIFO, size);
     SpiWriteBurstReg(CC1101_RXTXFIFO, txBuffer, size);    //write data to send
     SpiStrobe(STROBE_SIDLE);
-    SpiStrobe(STROBE_STX);                              //start send
+    
+    StartTransmitter();                              //start send
     delay(t);
+    
     SpiStrobe(STROBE_SFTX);                             //flush TXfifo
     trxstate = MODEM_TX;
 }

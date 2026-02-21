@@ -50,6 +50,9 @@ const char *password = MY_SSID_PASSWORD;
 
 #define DEFAULT_RxFREQ 867.38751
 
+#define DEFAULT_CENTER_SCAN 866887500
+#define DEFAULT_STEPSIZE_SCAN  1000
+
 #define DEFAULT_STEP   12500
 
 // position in big recording buffer
@@ -1052,6 +1055,8 @@ static void exec(char *input)
     }
     else if (strcmp_P(arg0, PSTR("scan")) == 0)
     {
+
+#if 0
     	// round down to nearest step size
         nextParam = atof(arg1);
         uint32_t startF = ((nextParam * 1000000.)/ DEFAULT_STEP) * DEFAULT_STEP;
@@ -1059,6 +1064,11 @@ static void exec(char *input)
         // round up to nearest step size
         nextParam = atof(arg2);
         uint32_t endF =   ((nextParam * 1000000.)/ DEFAULT_STEP) * DEFAULT_STEP;
+#else
+		// ensure auto cal on leaving IDLE is not on
+		uint32_t startF = DEFAULT_CENTER_SCAN - 20 * DEFAULT_STEPSIZE_SCAN;
+		uint32_t endF =   DEFAULT_CENTER_SCAN + 20 * DEFAULT_STEPSIZE_SCAN;
+#endif
 
  		uint32_t lclFREQ;
  		
@@ -1085,12 +1095,14 @@ static void exec(char *input)
         mark_rssi = -100;
 
 		ELECHOUSE_cc1101.getPktStatus();
+		ELECHOUSE_cc1101.getState();
 		
         while (!Serial.available())
         {
         	int hiRssi = -999;
             ELECHOUSE_cc1101.setFreqHz(lclFREQ);
 			ELECHOUSE_cc1101.EnterRxMode(false);
+			ELECHOUSE_cc1101.getState();
 			delay(1);
 
             for (int x = 0; x < 500; x++)
@@ -1113,7 +1125,7 @@ static void exec(char *input)
                     mark_freq = freq;
                 }
             }
-            lclFREQ += DEFAULT_STEP;
+            lclFREQ += DEFAULT_STEPSIZE_SCAN;
 
             if (lclFREQ > endF)
             {
@@ -1268,7 +1280,7 @@ static void exec(char *input)
             // with GDO0 pin processing
             ELECHOUSE_cc1101.setCCMode(I_DUNNO);
             ELECHOUSE_cc1101.setPktFormat(3);
-            ELECHOUSE_cc1101.EnterTxMode();
+            ELECHOUSE_cc1101.StartTransmitter();
             
 
             //start playing RF with setting GDO0 bit state with bitbanging
@@ -1300,7 +1312,7 @@ static void exec(char *input)
             // setting normal pkt format again
             ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);
             ELECHOUSE_cc1101.setPktFormat(0);
-            ELECHOUSE_cc1101.EnterTxMode();
+            ELECHOUSE_cc1101.StartTransmitter();
             ELECHOUSE_cc1101.setGDO0_hostpinMode(INPUT);
         } // end of IF
         else
@@ -1337,6 +1349,7 @@ static void exec(char *input)
 		
 		Serial.println("wait for 5 seconds");
 		delay(5000);
+		ELECHOUSE_cc1101.StartTransmitter();
 
 		while(Serial.available()) Serial.read();
 		
@@ -1515,7 +1528,7 @@ static void exec(char *input)
             // with GDO0 pin processing
             ELECHOUSE_cc1101.setCCMode(I_DUNNO);
             ELECHOUSE_cc1101.setPktFormat(3);
-            ELECHOUSE_cc1101.EnterTxMode();
+            ELECHOUSE_cc1101.StartTransmitter();
 
             
             //start replaying GDO0 bit state from data in the buffer with bitbanging
@@ -1537,7 +1550,7 @@ static void exec(char *input)
             // setting normal pkt format again
             ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);
             ELECHOUSE_cc1101.setPktFormat(0);
-            ELECHOUSE_cc1101.EnterTxMode();
+            ELECHOUSE_cc1101.StartTransmitter();
             ELECHOUSE_cc1101.setGDO0_hostpinMode(INPUT);
         }
         else
@@ -2088,7 +2101,7 @@ void setup()
 void loop()
 {
 	ArduinoOTA.handle();
-	//ELECHOUSE_cc1101.getPktStatus();
+	ELECHOUSE_cc1101.getPktStatus(true);
 
 	static bool bFirstTime = true;
 	if (bFirstTime)

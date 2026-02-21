@@ -101,8 +101,9 @@ typedef enum CONFIG_REG {
 
 
 //CC1101 Strobe commands
+
 typedef enum STROBES {
-    STROBE_SRES =0x30   ,   // Reset chip.
+    STROBE_SRES =0x30   ,   // Reset chip. 
     STROBE_SFSTXON      ,   // Enable and calibrate frequency synthesizer (if MCSM0.FS_AUTOCAL=1).
                             //  RX/TX: Go to a wait state where only the synthesizer is
                             // running (for quick RX / TX turnaround).
@@ -224,12 +225,15 @@ void setRxBW(float f);
 void setBaudRate(uint32_t d);
 void setDeviation_FSK2(float d);
 void setSymbolSpacingHz(float d);
-void EnterTxMode(void);
+void StartTransmitter(void);
 void EnterRxMode(bool bSilent=true);
 void EnterRxMode(float mhz, bool bSilent=true);
 int getRssi(void);
 byte getLqi(void);
-byte getState(bool bSilent=true);
+byte getMSMState(bool bSilent=true);
+byte getState(bool bSilent = true);
+int getErrorCarrier(void);
+
 
 void setSres(void);
 void EnterIdleMode(bool bSilent = true);
