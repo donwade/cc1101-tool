@@ -46,7 +46,7 @@ void runP25(void)
 	// setup async mode on CC1101 with GDO0 pin processing
 	ELECHOUSE_cc1101.setCCMode(SYMBOL_TICK);
 	ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); //fsk-4
-	ELECHOUSE_cc1101.EnterRxMode();
+	ELECHOUSE_cc1101.StartRecieve();
 	
 	//start recording to the buffer with bitbanging of GDO0 pin state
 	Serial.print(F("\r\n New Sniffer enabled...\r\n"));
@@ -170,5 +170,5 @@ void runP25(void)
 	// setting normal pkt format again
 	ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);
 	ELECHOUSE_cc1101.setPktFormat(0);
-	ELECHOUSE_cc1101.EnterRxMode();
+	ELECHOUSE_cc1101.StartRecieve();
 }

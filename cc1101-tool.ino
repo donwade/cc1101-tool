@@ -367,7 +367,7 @@ void rxRcvByFifosFsk4(void)
 #endif
 
 	ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_RX);	
-	ELECHOUSE_cc1101.EnterRxMode();
+	ELECHOUSE_cc1101.StartRecieve();
 
 	delay(1000);
 
@@ -1101,7 +1101,7 @@ static void exec(char *input)
         {
         	int hiRssi = -999;
             ELECHOUSE_cc1101.setFreqHz(lclFREQ);
-			ELECHOUSE_cc1101.EnterRxMode(false);
+			ELECHOUSE_cc1101.StartRecieve(false);
 			ELECHOUSE_cc1101.getState();
 			delay(1);
 
@@ -1213,7 +1213,7 @@ static void exec(char *input)
         }
         else if (receivingmode == 0)
         {
-            ELECHOUSE_cc1101.EnterRxMode();
+            ELECHOUSE_cc1101.StartRecieve();
             Serial.print(F("Enabled"));
             receivingmode = 1;
             jammingmode = 0;
@@ -1398,7 +1398,7 @@ static void exec(char *input)
             // setup async mode on CC1101 with GDO0 pin processing
             ELECHOUSE_cc1101.setCCMode(I_DUNNO);
             ELECHOUSE_cc1101.setPktFormat(3);
-            ELECHOUSE_cc1101.EnterRxMode();
+            ELECHOUSE_cc1101.StartRecieve();
 
 
             //start recording to the buffer with bitbanging of GDO0 pin state
@@ -1440,7 +1440,7 @@ static void exec(char *input)
             // setting normal pkt format again
             ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);
             ELECHOUSE_cc1101.setPktFormat(0);
-            ELECHOUSE_cc1101.EnterRxMode();
+            ELECHOUSE_cc1101.StartRecieve();
         }
         else
         {
@@ -1463,7 +1463,7 @@ static void exec(char *input)
             ELECHOUSE_cc1101.setCCMode(I_DUNNO);
             ELECHOUSE_cc1101.setPktFormat(3);
             ELECHOUSE_cc1101.setModulation(DEFAULT_MODULATION); //fsk-4
-            ELECHOUSE_cc1101.EnterRxMode();
+            ELECHOUSE_cc1101.StartRecieve();
             
             //start recording to the buffer with bitbanging of GDO0 pin state
             Serial.print(F("\r\nSniffer enabled...\r\n"));
@@ -1505,7 +1505,7 @@ static void exec(char *input)
             // setting normal pkt format again
             ELECHOUSE_cc1101.setCCMode(GDO0_isSYNC_TXEND);
             ELECHOUSE_cc1101.setPktFormat(0);
-            ELECHOUSE_cc1101.EnterRxMode();
+            ELECHOUSE_cc1101.StartRecieve();
         }
         else
         {
@@ -1724,7 +1724,7 @@ static void exec(char *input)
         }
         else if (recordingmode == 0)
         {
-            ELECHOUSE_cc1101.EnterRxMode();
+            ELECHOUSE_cc1101.StartRecieve();
             Serial.print(F("Enabled"));
             bigrecordingbufferpos = 0;
 
@@ -2207,7 +2207,7 @@ void runRX(void)
 	                binToAscii(ccreceivingbuffer, textBuffer, len);
 	                Serial.print((char *)textBuffer);
 	                // set RX  mode again
-	                ELECHOUSE_cc1101.EnterRxMode();
+	                ELECHOUSE_cc1101.StartRecieve();
 	            }
 
 	            ;        // end of handling receiving mode
@@ -2227,7 +2227,7 @@ void runRX(void)
 	                    // increase counter of frames stored
 	                    framesinbigrecordingbuffer++;
 	                    // set RX  mode again
-	                    ELECHOUSE_cc1101.EnterRxMode();
+	                    ELECHOUSE_cc1101.StartRecieve();
 	                }
 	                else
 	                {

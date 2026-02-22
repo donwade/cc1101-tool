@@ -226,7 +226,7 @@ void setBaudRate(uint32_t d);
 void setDeviation_FSK2(float d);
 void setSymbolSpacingHz(float d);
 void StartTransmitter(void);
-void EnterRxMode(bool bSilent=true);
+void StartRecieve(bool bSilent=true);
 void EnterRxMode(float mhz, bool bSilent=true);
 int getRssi(void);
 byte getLqi(void);
