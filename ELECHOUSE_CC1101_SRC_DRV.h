@@ -39,7 +39,8 @@ typedef enum {
 typedef enum {
     MODEM_IDLE,
     MODEM_TX,
-    MODEM_RX
+    MODEM_RX,
+    MODEM_CAL
 }eMODEM_STATE;
 
 //***************************************CC1101 define**************************************************//
@@ -221,17 +222,21 @@ bool wait4FallingIRQ_GDO2(void);
 
 void setLogicalChanNum(byte chnl);
 void setChannelSpacing(float f);
-void setRxBW(float f);
+void setRxBwKhz(float f);
+uint32_t getRxBwHz(void);
+
 void setBaudRate(uint32_t d);
 void setDeviation_FSK2(float d);
 void setSymbolSpacingHz(float d);
-void StartTransmitter(void);
+void StartTransmitter(bool bSilent=true);
 void StartRecieve(bool bSilent=true);
+void StartManCal(bool bSilent=false);
+
 void EnterRxMode(float mhz, bool bSilent=true);
 int getRssi(void);
 byte getLqi(void);
-byte getMSMState(bool bSilent=true);
-byte getState(bool bSilent = true);
+byte wait4State2Settle(bool bSilent=true);
+byte parseSpiResponse(bool bSilent = true);
 int getErrorCarrier(void);
 
 

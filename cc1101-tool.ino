@@ -232,7 +232,7 @@ static void cc1101initialize(void)
     ELECHOUSE_cc1101.setLogicalChanNum(0);         	// Set the Channelnumber from 0 to 255. Default is cahnnel 0.
 
     ELECHOUSE_cc1101.setChannelSpacing(25.39);    // The channel spacing is multiplied by the channel number CHAN and added to the base frequency in kHz. Value from 25.39 to 405.45. Default is 199.95 kHz.
-    ELECHOUSE_cc1101.setRxBW(58.3);       	// Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
+    ELECHOUSE_cc1101.setRxBwKhz(58.3);       	// Set the Receive Bandwidth in kHz. Value from 58.03 to 812.50. Default is 812.50 kHz.
     
     ELECHOUSE_cc1101.setBaudRate(DEFAULT_BAUD);   // Set the Data Rate in Baud. 
     										// Value from 200 to 1,621,830. 
@@ -757,7 +757,7 @@ static void exec(char *input)
     else if (strcmp_P(arg0, PSTR("setrxbw")) == 0)
     {
         nextParam = atof(arg1);
-        ELECHOUSE_cc1101.setRxBW(nextParam);
+        ELECHOUSE_cc1101.setRxBwKhz(nextParam);
         Serial.print(F("\r\nRX bandwidth: "));
         Serial.print(nextParam);
         Serial.print(F(" kHz \r\n"));
@@ -1066,23 +1066,23 @@ static void exec(char *input)
         uint32_t endF =   ((nextParam * 1000000.)/ DEFAULT_STEP) * DEFAULT_STEP;
 #else
 		// ensure auto cal on leaving IDLE is not on
-		uint32_t startF = DEFAULT_CENTER_SCAN - 20 * DEFAULT_STEPSIZE_SCAN;
-		uint32_t endF =   DEFAULT_CENTER_SCAN + 20 * DEFAULT_STEPSIZE_SCAN;
+		uint32_t wide = ELECHOUSE_cc1101.getRxBwHz();
+		uint32_t startF = DEFAULT_CENTER_SCAN - 5 * wide;
+		uint32_t endF =   DEFAULT_CENTER_SCAN + 5 * wide;
 #endif
 
  		uint32_t lclFREQ;
  		
-        Serial.print(F("\r\nScanning frequency range from : "));
+        Serial.printf("Scan %d -> %d Stepsize = %d\n ", startF, endF, wide);
         Serial.print(startF);
         Serial.print(F(" to "));
         Serial.print(endF);
         Serial.print(F(" press any key for stop or wait...\r\n"));
 
-		delay(4000);
 		
         // initialize parameters for scanning
         ELECHOUSE_cc1101.EnterIdleMode();
-        ELECHOUSE_cc1101.setRxBW(58);
+        ELECHOUSE_cc1101.setRxBwKhz(58.4);
         ELECHOUSE_cc1101.setModulation(2); //ook I want amplitude
 		ELECHOUSE_cc1101.setPQT(0);  // disable preamble counter.
 		ELECHOUSE_cc1101.setCrc(0); 	// no crc checking.
@@ -1090,19 +1090,22 @@ static void exec(char *input)
 		ELECHOUSE_cc1101.setSyncWord(0,0);
 		ELECHOUSE_cc1101.setSyncMode(0); // expect no sync, rssi free runs
 
+		delay(4000);
+		ELECHOUSE_cc1101.StartManCal();
+
         // Do scanning until some key pressed
         lclFREQ = startF;  // start frequency for scanning
         mark_rssi = -100;
 
 		ELECHOUSE_cc1101.getPktStatus();
-		ELECHOUSE_cc1101.getState();
+		ELECHOUSE_cc1101.parseSpiResponse();
 		
         while (!Serial.available())
         {
         	int hiRssi = -999;
             ELECHOUSE_cc1101.setFreqHz(lclFREQ);
 			ELECHOUSE_cc1101.StartRecieve(false);
-			ELECHOUSE_cc1101.getState();
+			ELECHOUSE_cc1101.parseSpiResponse();
 			delay(1);
 
             for (int x = 0; x < 500; x++)
@@ -1125,7 +1128,8 @@ static void exec(char *input)
                     mark_freq = freq;
                 }
             }
-            lclFREQ += DEFAULT_STEPSIZE_SCAN;
+            
+            lclFREQ += wide/2;
 
             if (lclFREQ > endF)
             {
@@ -1157,6 +1161,9 @@ static void exec(char *input)
                
                lclFREQ = startF;
                Serial.println("--------------------------------");
+               
+			   ELECHOUSE_cc1101.setFreqHz(startF); // recal on start of sweep.
+			   //ELECHOUSE_cc1101.StartManCal();
 			   ELECHOUSE_cc1101.getPktStatus();
                
             }

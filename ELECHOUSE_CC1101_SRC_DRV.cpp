@@ -78,17 +78,26 @@ byte GDO2;
 bool spi = 0;
 
 eGDIO_MODES ccmode = NOT_INITED;
-eMODEM_STATE trxstate = MODEM_IDLE;
+eMODEM_STATE mdmState = MODEM_IDLE;
 
 float gMHz = 905.0;
- 
+uint32_t gRxBwHz = 0;
+
+
 byte uPacketHandleMode;
 byte uPacketLenConf;
 
-// all spi operations return status when the address byte is sent.
+///--------------------------------------------------------------
+// all spi operations return status IMMEDIATELY when the address byte is sent.
 // documentation calls the spi address as 'the header'. How dumb.
+// of course data read/write may follow the address, but the status is already captured.
 
 uint8_t lastStatusRet;
+uint8_t gMachineState;
+uint8_t gMachineFifoLvl;
+
+
+///--------------------------------------------------------------
 
 
 // NOTE: this is now expressed in hertz, not Smartnet vals
@@ -423,9 +432,8 @@ void ELECHOUSE_CC1101::SpiStart(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::SpiEnd(void)
 {
-    // disable MY_SPI
-    MY_SPI.endTransaction();
-    //MY_SPI.end();   // DWADE DO NOT DO THIS!!! 
+    MY_SPI.endTransaction();  // release the internal mutex if there is one.
+  //MY_SPI.end();   // DWADE DO NOT DO THIS!!! 
 }
 
 
@@ -497,7 +505,9 @@ void ELECHOUSE_CC1101::Reset(void)
     delay(1);
 
     digitalWrite(SS_PIN, LOW);
-	
+
+	// all strobes only have an address field and that's it.
+	// capture the status in any event.
     lastStatusRet = MY_SPI.transfer(STROBE_SRES);
 
     digitalWrite(SS_PIN, HIGH);
@@ -576,7 +586,10 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , uint8_t addr, byte value, 
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
 
+	//address
     lastStatusRet = MY_SPI.transfer(addr);
+
+    //data
     MY_SPI.transfer(value);
     digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
@@ -607,9 +620,11 @@ void ELECHOUSE_CC1101::SpiWriteBurstReg(CONFIG_REG addr, byte *buffer, byte num)
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
-    
+
+    //address
     lastStatusRet = MY_SPI.transfer(temp);
 
+	//data
     for (i = 0; i < num; i++)
         MY_SPI.transfer(buffer[i]);
 
@@ -668,15 +683,19 @@ uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBES commandStrobe, bool bSilent)
 
 	assert(commandStrobe >= STROBE_SRES && commandStrobe <= STROBE_SNOP);
 	//assert(STROBE_SNOP == 0x3D);  // table test.
-	
-    for (int i = 0; i < sizeof(okay)/sizeof(okay[0]); i++)
-    {
-    	if (commandStrobe != okay[i].num) continue;
-    	
-		if(!bSilent) Serial.printf(FG_GREEN "\n%s 0x%0X -> %s\n" _DONE, __FUNCTION__, okay[i].num, okay[i].msg);
-		break;
-    }
 
+	if (!bSilent)
+	{
+	    for (int i = 0; i < sizeof(okay)/sizeof(okay[0]); i++)
+	    {
+	    	if (commandStrobe != okay[i].num) continue;
+	    	
+			Serial.printf(FG_GREEN "\n%s 0x%0X -> %s\n" _DONE, 
+						__FUNCTION__, okay[i].num, okay[i].msg);
+			break;
+	    }
+	}
+	
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
@@ -684,7 +703,8 @@ uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBES commandStrobe, bool bSilent)
     digitalWrite(SS_PIN, LOW);
 
 	// "When writing command strobes, the status byte is sent on the SO pin".
-
+	// status is coughed up on the address byte being set but before any optional data
+	
     lastStatusRet = MY_SPI.transfer(commandStrobe); // commands only send an address w no data
     
     digitalWrite(SS_PIN, HIGH);
@@ -693,7 +713,10 @@ uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBES commandStrobe, bool bSilent)
     digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
 
-	getMSMState(bSilent);
+	// strobes change the state machine. Some states are transistionary.
+	// wait for state to settle down to idle/rx/tx.
+	
+	wait4State2Settle(bSilent);
 	
     SpiEnd();
     return lastStatusRet;
@@ -719,7 +742,9 @@ byte ELECHOUSE_CC1101::SpiReadReg(CONFIG_REG addr)
     digitalWrite(SS_PIN, LOW);
 
     lastStatusRet = MY_SPI.transfer(temp); // address returns status
-    value = MY_SPI.transfer(0);
+    
+    value = MY_SPI.transfer(0);		// get the data.
+    
     digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
     digitalWrite(SS_PIN, HIGH);
@@ -1671,7 +1696,7 @@ bool ELECHOUSE_CC1101::getCC1101(void)
 ****************************************************************/
 eMODEM_STATE ELECHOUSE_CC1101::getMode(void)
 {
-    return trxstate;
+    return mdmState;
 }
 
 /****************************************************************
@@ -2316,48 +2341,27 @@ void ELECHOUSE_CC1101::setChannelSpacing(float channelSpaceF)
 }
 
 
+
+/****************************************************************
+* FUNCTION NAME:Get Receive bandwidth
+* FUNCTION     :none
+* INPUT        :none
+* OUTPUT       :none
+****************************************************************/
+uint32_t ELECHOUSE_CC1101::getRxBwHz(void)
+{
+	return gRxBwHz;
+}
+
 /****************************************************************
 * FUNCTION NAME:Set Receive bandwidth
 * FUNCTION     :none
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setRxBW(float rxBw)
+void ELECHOUSE_CC1101::setRxBwKhz(float rxBw)
 {
-#if OEM_CODE
-    Split_MDMCFG4();
-    int s1 = 3;
-    int s2 = 3;
 
-    for (int i = 0; i < 3; i++)
-    {
-        if (rxBw > 101.5625)
-        {
-            rxBw /= 2; s1--;
-        }
-        else
-        {
-            i = 3;
-        }
-    }
-
-    for (int i = 0; i < 3; i++)
-    {
-        if (rxBw > 58.1)
-        {
-            rxBw /= 1.25; s2--;
-        }
-        else
-        {
-            i = 3;
-        }
-    }
-
-    s1 *= 64;
-    s2 *= 16;
-    m4RxBw = s1 + s2;
-    SpiWriteReg(16, m4RxBw + m4DaRa);
-#else
 	int16_t exp;
 	float mantissa;
 	int32_t iMant;
@@ -2368,6 +2372,9 @@ void ELECHOUSE_CC1101::setRxBW(float rxBw)
 	Serial.printf(FG_MAGENTA "\n%s: setting rx bw = %5.2f khz\n" _DONE, __FUNCTION__, rxBw);
 
 	rxBw *= 1000.;
+	gRxBwHz = rxBw;
+	assert(gRxBwHz > 58030 && gRxBwHz < 812500);
+	
 	float FIXED = (XTAL_Mhz * 1.e6) / (rxBw * 8.);
 
 	for (exp = 0; exp < 4; exp++)
@@ -2391,7 +2398,7 @@ void ELECHOUSE_CC1101::setRxBW(float rxBw)
 
 	setField(CC1101_MDMCFG4, lockExp, 7, 6);
 	setField(CC1101_MDMCFG4, lockMantissa, 5, 4);
-#endif
+	
 }
 
 
@@ -2577,7 +2584,7 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
     //SpiWriteReg(CC1101_DEVIATN, 0x47);
     
     SpiWriteReg(CC1101_FREND1, 0x56);
-    SpiWriteReg(CC1101_MCSM0, 0x18);
+    SpiWriteReg(CC1101_MCSM0, 0x08);	// disable auto cal. (was 0x18)
     SpiWriteReg(CC1101_FOCCFG, 0x16);
     SpiWriteReg(CC1101_BSCFG, 0x1C);
     
@@ -2608,20 +2615,19 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::StartTransmitter(void)
+void ELECHOUSE_CC1101::StartTransmitter(bool bSilent)
 {
-	Serial.printf("************* StartTransmitter\n");
-    SpiStrobe(STROBE_SIDLE);
+    SpiStrobe(STROBE_SIDLE, bSilent);
     setMHZ(gMHz);
     
-    SpiStrobe(STROBE_STX);      //start send
+    SpiStrobe(STROBE_STX, bSilent);      //start send
     
     Serial.printf(FG_FYELLOW "%s: TX MODE !!!! \n", __FUNCTION__);
-    trxstate = MODEM_TX;
+    mdmState = MODEM_TX;
 
     
-    getMSMState(false);
-    getState(false);
+    wait4State2Settle(bSilent);
+    parseSpiResponse(bSilent);
 }
 
 
@@ -2635,16 +2641,42 @@ void ELECHOUSE_CC1101::StartRecieve(bool bSilent)
 {
 	//esp_backtrace_print(5);
 
-	if(!bSilent) Serial.printf("************** StartRecieve ****\n");
 	EnterIdleMode(bSilent);
 	
-    SpiStrobe(STROBE_SIDLE);
-    SpiStrobe(STROBE_SRX);      //start receive
+    SpiStrobe(STROBE_SIDLE, bSilent);
+    SpiStrobe(STROBE_SRX, bSilent);      //start receive
     
     if(!bSilent) Serial.printf(FG_FYELLOW "%s: RX MODE !!!! \n", __FUNCTION__);
-    trxstate = MODEM_RX;
+    mdmState = MODEM_RX;
     
-    getMSMState(bSilent);
+    wait4State2Settle(bSilent);
+}
+
+
+/****************************************************************
+* FUNCTION NAME:StartManCal
+* FUNCTION     :
+* INPUT        :none
+* OUTPUT       :none
+****************************************************************/
+void ELECHOUSE_CC1101::StartManCal(bool bSilent)
+{
+	//esp_backtrace_print(5);
+
+	EnterIdleMode(true);
+	
+	setField(CC1101_MCSM0, 0, 5,4);		// manual, called ensure auto-cal is off
+	
+    Serial.printf(FG_FYELLOW "\n%s: CAL MODE !!!! \n", __FUNCTION__);
+    mdmState = MODEM_CAL;
+    
+    SpiStrobe(STROBE_SCAL, false);      //start cal, (gqrx sees beacon!)
+    
+
+	delay(300);
+	EnterIdleMode(false);  // always hightlight CAL is off.
+
+    Serial.printf(FG_FYELLOW "%s: CAL MODE done !!!!\n\n", __FUNCTION__);
 }
 
 /****************************************************************
@@ -2661,9 +2693,9 @@ void ELECHOUSE_CC1101::EnterRxMode(float mhz, bool bSilent)
     SpiStrobe(STROBE_SRX);      //start receive
     
     if(!bSilent) Serial.printf(FG_FYELLOW "%s: RX MODE + freq !!!! \n", __FUNCTION__);
-    trxstate = MODEM_RX;
+    mdmState = MODEM_RX;
     
-    getMSMState(bSilent);
+    wait4State2Settle(bSilent);
 }
 
 
@@ -2824,10 +2856,7 @@ typedef struct PAIR
     char *right;
 };
 
-uint8_t gStatus;
-uint8_t gFifoLvl;
-
-byte ELECHOUSE_CC1101::getState(bool bSilent)
+byte ELECHOUSE_CC1101::parseSpiResponse(bool bSilent)
 {
 	// get generic state of machine.
 /*
@@ -2843,10 +2872,10 @@ byte ELECHOUSE_CC1101::getState(bool bSilent)
 */	
 	static const char *msg[] = { "IDLE", "RX", "TX", "FSTXON", "CAL", "PLL", "RxOFLOW", "TxOFLOW" };
 	
-	gStatus = regMaskRead<uint8_t> (lastStatusRet, 6, 4);
-	gFifoLvl = regMaskRead<uint8_t> (lastStatusRet, 3, 0);
+	gMachineState = regMaskRead<uint8_t> (lastStatusRet, 6, 4);
+	gMachineFifoLvl = regMaskRead<uint8_t> (lastStatusRet, 3, 0);
 
-	if (gStatus == 6)
+	if (gMachineState == 6)
 	{
 		//rx overflow
 		while (true)
@@ -2854,32 +2883,31 @@ byte ELECHOUSE_CC1101::getState(bool bSilent)
 			// read fifo until mt as per doc.
 			uint8_t toss = SpiReadReg(CC1101_RXTXFIFO);
 			
-			SpiStrobe(STROBE_SNOP);
-			gStatus = regMaskRead<uint8_t> (lastStatusRet, 6, 4);
-			gFifoLvl = regMaskRead<uint8_t> (lastStatusRet, 3, 0);
-			if(!gFifoLvl)
+			gMachineState = regMaskRead<uint8_t> (lastStatusRet, 6, 4);
+			gMachineFifoLvl = regMaskRead<uint8_t> (lastStatusRet, 3, 0);
+			if(!gMachineFifoLvl)
 			{
 		
 				SpiStrobe(STROBE_SFRX);
 				break;
 			}
-			Serial.printf("rx flushing %d\n", gFifoLvl);
+			Serial.printf("rx flushing %d\n", gMachineFifoLvl);
 		} 
 		SpiStrobe(STROBE_SFRX);
 	}
-	else if (gStatus == 7)
+	else if (gMachineState == 7)
 	{
 		// tx overflow
-		Serial.printf("tx flushed %d\n", gFifoLvl);
+		Serial.printf("tx flushed %d\n", gMachineFifoLvl);
 		SpiStrobe(STROBE_SFTX);
 	}
 	
-	Serial.printf(FG_CYAN "%s: status = %d [%s]\n" _DONE , __FUNCTION__, gStatus, msg[gStatus]);
+	Serial.printf(FG_CYAN "%s: status = %d [%s]\n" _DONE , __FUNCTION__, gMachineState, msg[gMachineState]);
 
-	return gStatus;
+	return gMachineState;
 }
 
-byte ELECHOUSE_CC1101::getMSMState(bool bSilent)
+byte ELECHOUSE_CC1101::wait4State2Settle(bool bSilent)
 {
 	byte status;
 	static const PAIR msg[] = 
@@ -2939,7 +2967,7 @@ void ELECHOUSE_CC1101::setSres(void)
 {
     Serial.printf("%s: **** chip h/w reset ***\n", __FUNCTION__);delay(5000);
     SpiStrobe(STROBE_SRES);
-    trxstate = MODEM_IDLE;
+    mdmState = MODEM_IDLE;
 }
 
 
@@ -2952,11 +2980,11 @@ void ELECHOUSE_CC1101::setSres(void)
 void ELECHOUSE_CC1101::EnterIdleMode(bool bSilent)
 {
     SpiStrobe(STROBE_SIDLE);
-    trxstate = MODEM_IDLE;
+    mdmState = MODEM_IDLE;
     
     if (!bSilent) Serial.printf(FG_FYELLOW "%s: IDLE !!!! \n", __FUNCTION__);
-    getMSMState(bSilent);
-    getState(bSilent);
+    wait4State2Settle(bSilent);
+    parseSpiResponse(bSilent);
 }
 
 /****************************************************************
@@ -2967,7 +2995,7 @@ void ELECHOUSE_CC1101::EnterIdleMode(bool bSilent)
 ****************************************************************/
 void ELECHOUSE_CC1101::goSleep(void)
 {
-    trxstate = MODEM_IDLE;
+    mdmState = MODEM_IDLE;
     SpiStrobe(STROBE_SRES);    //Exit RX / TX, turn off frequency synthesizer and exit
     SpiStrobe(STROBE_SPWD);    //Enter power down mode when CSn goes high.
     
@@ -3055,7 +3083,7 @@ void ELECHOUSE_CC1101::SendBinaryData(byte *txBuffer, byte size)
     while ( digitalRead(GDO0)); // -> end of packet
 
     ///// SpiStrobe(STROBE_SFTX);                 //flush TXfifo
-    trxstate = MODEM_TX;
+    mdmState = MODEM_TX;
 }
 
 
@@ -3077,7 +3105,7 @@ void ELECHOUSE_CC1101::SendBinaryDataWithNoGDO(byte *txBuffer, byte size, int t)
     delay(t);
     
     SpiStrobe(STROBE_SFTX);                             //flush TXfifo
-    trxstate = MODEM_TX;
+    mdmState = MODEM_TX;
 }
 
 
@@ -3113,7 +3141,7 @@ bool ELECHOUSE_CC1101::CheckCRC(void)
 ****************************************************************/
 bool ELECHOUSE_CC1101::CheckRxFifo(int t)
 {
-    if (trxstate != MODEM_RX)
+    if (mdmState != MODEM_RX)
         StartRecieve();
 
     if (SpiReadStatus(STATUS_RXBYTES) & MASK_GETBYTES_FIFO)
@@ -3136,7 +3164,7 @@ bool ELECHOUSE_CC1101::CheckRxFifo(int t)
 ****************************************************************/
 byte ELECHOUSE_CC1101::CheckReceiveFlag(void)
 {
-    if (trxstate != MODEM_RX)
+    if (mdmState != MODEM_RX)
         StartRecieve();
 
     if (digitalRead(GDO0))                      //receive data
