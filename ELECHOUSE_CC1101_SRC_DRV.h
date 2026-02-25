@@ -236,8 +236,9 @@ void EnterRxMode(float mhz, bool bSilent=true);
 int getRssi(void);
 byte getLqi(void);
 byte wait4State2Settle(bool bSilent=true);
-byte parseSpiResponse(bool bSilent = true);
+byte parseLastSpiTrans(bool bSilent = true);
 int getErrorCarrier(void);
+void EnableAbort(bool bEnable);
 
 
 void setSres(void);

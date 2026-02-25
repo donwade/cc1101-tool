@@ -1098,27 +1098,30 @@ static void exec(char *input)
         mark_rssi = -100;
 
 		ELECHOUSE_cc1101.getPktStatus();
-		ELECHOUSE_cc1101.parseSpiResponse();
+		ELECHOUSE_cc1101.parseLastSpiTrans();
+		ELECHOUSE_cc1101.StartRecieve(false);
+		
+		ELECHOUSE_cc1101.EnableAbort(true);
 		
         while (!Serial.available())
         {
-        	int hiRssi = -999;
             ELECHOUSE_cc1101.setFreqHz(lclFREQ);
-			ELECHOUSE_cc1101.StartRecieve(false);
-			ELECHOUSE_cc1101.parseSpiResponse();
+			ELECHOUSE_cc1101.parseLastSpiTrans();
 			delay(1);
 
-            for (int x = 0; x < 500; x++)
+/*
+        	int hiRssi = -999;
+            for (int x = 0; x < 50; x++)
             {
 	            rssi = ELECHOUSE_cc1101.getRssi();
-	            delay(1);
+	            delay(10);
 	            if (rssi > hiRssi) hiRssi = rssi;
 	        }
-	        rssi = hiRssi;
-
-			ELECHOUSE_cc1101.getPktStatus();
+ */
+ 
 	        
-        	Serial.printf("%d rssi = %d\n", lclFREQ, rssi);
+        	//Serial.printf("\n%d rssi = %d\n", lclFREQ, ELECHOUSE_cc1101.getRssi());
+			ELECHOUSE_cc1101.getPktStatus(false);
 
             if (rssi > -75)
             {
@@ -1161,11 +1164,7 @@ static void exec(char *input)
                
                lclFREQ = startF;
                Serial.println("--------------------------------");
-               
-			   ELECHOUSE_cc1101.setFreqHz(startF); // recal on start of sweep.
-			   //ELECHOUSE_cc1101.StartManCal();
-			   ELECHOUSE_cc1101.getPktStatus();
-               
+ 			               
             }
         }
 		Serial.read();
