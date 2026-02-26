@@ -31,6 +31,7 @@
 #include <NetworkUdp.h>
 #include <ArduinoOTA.h>
 #include "esp_intr_types.h"
+#include "keyboard.h"
 
 const char *ssid = MY_SSID;
 const char *password = MY_SSID_PASSWORD;
@@ -1516,6 +1517,13 @@ void setup()
     Serial.println(F("CC1101 terminal tool connected, use 'help' for list of commands..."));
     Serial.println(F("(C) Adam Loboda 2023  "));
 
+	while(true)
+	{
+		KEYS test = getKey(false);
+		if (test == NOPRESS) continue;
+		Serial.printf("HI DON %d 0x%02X %c\n", test, test, test);
+	}
+	
     //Init EEPROM - for ESP32 based boards only
     EEPROM.begin(EPROMSIZE);
 
