@@ -265,8 +265,7 @@ void ELECHOUSE_CC1101::_setField(const char *regName, uint8_t regNum, uint8_t va
 	uint8_t temp = regNow;
 	uint8_t want = regMaskWrite<uint8_t> ( temp, value, LHS, RHS);
 
-	Serial.printf("\n[0x%02X] %s 0x%02X\n", regNum, regName, want ); 
-	
+	Serial.printf("[0x%02X] %s 0x%02X\n", regNum, regName, want ); 
 	
 	if(regNow != want)
 	{
@@ -1380,11 +1379,18 @@ void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent, bool bSkipBandCal)
 	
 	gMHz= mhz;
 
-    if (!bSkipBandCal) 
-    	AddBandCal();
-    else
-    	Serial.printf(FG_RED "%s skipping band calibration\n", __FUNCTION__);
-
+	// addband cal sets too many 'other' registers like pa power etc
+	// always call it. Take away freq cal if needed later.
+   	AddBandCal(bSilent);
+   	
+    if (bSkipBandCal)
+    {
+    	//take away any band FREQUENCY aspect, zero it.
+    	//range is ±202 kHz set to 0
+    	SpiWriteReg(CONFIG_FSCTRL0, 0);
+    	Serial.printf(FG_RED "%s skipping band calibration\n" FG_DONE, __FUNCTION__);
+	}
+	
 #if 0
 	// verify.
 	uint32_t tweaked = SpiReadReg(CONFIG_FREQ2) << 16 | SpiReadReg(CONFIG_FREQ1)  << 8 | SpiReadReg(CONFIG_FREQ0);
@@ -1407,7 +1413,7 @@ void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent, bool bSkipBandCal)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::AddBandCal(void)
+void ELECHOUSE_CC1101::AddBandCal(bool bSilent)
 {
 
 	//CONFIG_FSCTRL0 = add offset to any setMHZ command BY HARDWARE!
@@ -1421,7 +1427,7 @@ void ELECHOUSE_CC1101::AddBandCal(void)
     {
     	
         int32_t offset =(CONFIG_FSCTRL0, map(gMHz, 300, 348, hwTweakHz_300_348Mhz[0], hwTweakHz_300_348Mhz[1]));
-		Serial.printf(FG_GREEN "%s 300->348 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
+		if (!bSilent) Serial.printf(FG_GREEN "%s 300->348 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
         
         SpiWriteReg(CONFIG_FSCTRL0, offset / hzPerStep);
 
@@ -1444,7 +1450,7 @@ void ELECHOUSE_CC1101::AddBandCal(void)
     else if (gMHz >= 378 && gMHz <= 464)
     {
         int32_t offset =(CONFIG_FSCTRL0, map(gMHz, 378, 464, hwTweakHz_378_464Mhz[0], hwTweakHz_378_464Mhz[1]));
-		Serial.printf(FG_GREEN "%s 378->464 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
+		if (!bSilent) Serial.printf(FG_GREEN "%s 378->464 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
         
         SpiWriteReg(CONFIG_FSCTRL0, offset / hzPerStep);
 
@@ -1468,7 +1474,7 @@ void ELECHOUSE_CC1101::AddBandCal(void)
     {
     
 		int32_t offset =(CONFIG_FSCTRL0, map(gMHz, 779, 899, hwTweakHz_779_899Mhz[0], hwTweakHz_779_899Mhz[1]));
-		Serial.printf(FG_GREEN "%s 779->899 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
+		if (!bSilent) Serial.printf(FG_GREEN "%s 779->899 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
 		
 		SpiWriteReg(CONFIG_FSCTRL0, offset / hzPerStep);
 	
@@ -1492,9 +1498,12 @@ void ELECHOUSE_CC1101::AddBandCal(void)
     {
 
 		int32_t offset =(CONFIG_FSCTRL0, map(gMHz, 900, 928, hwTweakHz_900_928Mhz[0], hwTweakHz_900_928Mhz[1]));
-		Serial.printf(FG_GREEN "%s 900->928 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
-
-		Serial.printf("note: %d %d\n", offset / hzPerStep,  (uint8_t)( offset / hzPerStep));
+		if (!bSilent) 
+		{
+			Serial.printf(FG_GREEN "%s 900->928 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
+			Serial.printf("note: %d %d\n", offset / hzPerStep,  (uint8_t)( offset / hzPerStep));
+		}	
+		
 		SpiWriteReg(CONFIG_FSCTRL0, (uint8_t)(offset / hzPerStep));
 		
         SpiWriteReg(CONFIG_TEST0, 0x09);
@@ -2316,7 +2325,8 @@ void ELECHOUSE_CC1101::setBaudRate(uint32_t bps)
 		double expTest = (float)(1 << exp);
 		double mantissa = ((FIXED - 256.0 * expTest)) /expTest;
 		iTest = mantissa;
-		Serial.printf("\t\texp=%d  mant=%d\n", exp, (int)mantissa);
+		
+		//Serial.printf("\t\texp=%d  mant=%d\n", exp, (int)mantissa);
 
 		if (iTest < 0) continue;	// negative is bad for pll
 		if (iTest > 255) continue;	// can't fit in a 8bit register

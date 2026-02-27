@@ -59,8 +59,10 @@ void bandCal(uint32_t startFreq)
 	if (startFreq < 1000) startFreq *= 1000000;
 
 	uint32_t frozen = startFreq;
-
-	Serial.printf(">>>>>>>>>>>>>>>> %d offset=%d %d decade=%d\n", frozen, startFreq - frozen, startFreq, digitSel);
+	Serial.printf("\tuse left/right arrows to adj\n\tuse up/down to adj 10's\n\tspace to exit\n");
+	delay(2000);
+	
+	Serial.printf(">>> initial >>> %d offset=%d %d decade=%d\n", frozen, startFreq - frozen, startFreq, digitSel);
 	beacon(startFreq);
 
 	Serial.printf(FG_CYAN "Cal Ranges 300-348Mhz 378-464Mhz 779-899Mhz 900-928Mhz\n");
