@@ -5,9 +5,10 @@ typedef enum KEYS
     LEFT = 0x80,
     RIGHT,
     UP,
-    DOWN
+    DOWN,
+    EXIT
 };
 
-KEYS getKey(bool bBlocking);
+KEYS getKey(bool bBlocking = true);
 
 

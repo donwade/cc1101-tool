@@ -212,7 +212,7 @@ void setTxOffMode(uint8_t type);
 
 
 void setMHZ(float mhz = 0.0 , bool bSilent = true, bool bSkipBandCal = false);
-void setFreqHz(uint32_t mhz, bool bSilent, bool bSkipBandCal);
+void setFreqHz(uint32_t mhz, bool bSilent = true, bool bSkipBandCal = false);
 
 float getMHZ(void);
 void setGDOxPinConfig(uint8_t reg, uint8_t value, bool bSilent=false);
@@ -229,9 +229,6 @@ bool wait4FallingIRQ_GDO0(void);
 bool wait4RisingIRQ_GDO2(void);
 bool wait4FallingIRQ_GDO2(void);
 
-
-
-float setOSCdrift(float hz);
 void setLogicalChanNum(byte chnl);
 void setChannelSpacing(float f);
 void setRxBW(float f);
@@ -243,7 +240,7 @@ void EnterRxMode(void);
 void EnterRxMode(float mhz);
 int getRssi(void);
 byte getLqi(void);
-byte getState(void);
+byte getState(bool bSilent = true);
 
 void setSres(void);
 void EnterIdleMode(void);
@@ -257,7 +254,9 @@ void SendDataCppString(String &txchar);
 byte CheckReceiveFlag(void);
 byte ReceiveData(byte *rxBuffer);
 bool CheckCRC(void);
-uint8_t SpiStrobe(byte strobe);
+
+uint8_t SpiStrobe(byte strobe, bool bSilent=true);
+
 void _SpiWriteReg(const char*name, CONFIG_REG addr, byte value, bool bQuiet=false);
 void SpiWriteBurstReg(CONFIG_REG addr, byte *buffer, byte num);
 byte SpiReadReg(CONFIG_REG addr);

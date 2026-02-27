@@ -74,3 +74,14 @@ KEYS getKey(bool bBlocking)
 		}
 	}		
 }
+
+/*
+while(true)
+{
+	KEYS test = getKey(false);
+	if (test == NOPRESS) continue;
+	Serial.printf("HI DON %d 0x%02X %c\n", test, test, test);
+}
+*/
+
+

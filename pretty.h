@@ -16,7 +16,7 @@
 #define IS_DIM  	    2
 #define IS_Underline	4
 
-#define _DONE "\033[0m"
+#define FG_DONE "\033[0m"
 
 
 #define FG_RED        "\033[0;31m"

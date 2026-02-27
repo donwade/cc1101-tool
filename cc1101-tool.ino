@@ -32,6 +32,7 @@
 #include <ArduinoOTA.h>
 #include "esp_intr_types.h"
 #include "keyboard.h"
+#include "bandcal.h"
 
 const char *ssid = MY_SSID;
 const char *password = MY_SSID_PASSWORD;
@@ -965,8 +966,21 @@ static void exec(char *input)
     {
     	txSendByFifos();
     }
-    else if (strcmp_P(cmd, PSTR("cal")) == 0)
+    else if (strcmp_P(cmd, PSTR("cal2")) == 0)
     {
+    	char *temp = strsep(&cmd_args, " ");
+    	if (temp)
+    	{
+	    	uint32_t startFreq = atoi(temp);
+    		bandCal(startFreq);
+    	}
+    	else
+    	{
+    		Serial.printf("cal2 requires a start freq\n");
+    	}
+    }
+	else if (strcmp_P(cmd, PSTR("cal")) == 0)
+	{
     	byte binaryArray[50];
 
         // convert hex array to set of bytes
@@ -1358,12 +1372,6 @@ static void exec(char *input)
 
         // Handling ECHO command
     }
-    else if (strcmp_P(cmd, PSTR("offset")) == 0)
-    {
-    	float now = atof(cmd_args);
-        float orig = radio.setOSCdrift(now);
-		Serial.printf(">>> %s : old = %f new = %f\n", cmd, orig, now);
-	}
 	else if (strcmp_P(cmd, PSTR("x")) == 0)
 	{
 	    receivingmode = 0;
@@ -1517,13 +1525,6 @@ void setup()
     Serial.println(F("CC1101 terminal tool connected, use 'help' for list of commands..."));
     Serial.println(F("(C) Adam Loboda 2023  "));
 
-	while(true)
-	{
-		KEYS test = getKey(false);
-		if (test == NOPRESS) continue;
-		Serial.printf("HI DON %d 0x%02X %c\n", test, test, test);
-	}
-	
     //Init EEPROM - for ESP32 based boards only
     EEPROM.begin(EPROMSIZE);
 
