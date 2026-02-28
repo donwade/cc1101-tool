@@ -180,7 +180,7 @@ void Reset(void);
 void setSpi(void);
 
 void RegConfigSettings(void);
-void AddBandCal(bool bSilent = true);
+int32_t AddBandCal(bool bSilent = true);
 
 public:
 void DumpRegs(void);

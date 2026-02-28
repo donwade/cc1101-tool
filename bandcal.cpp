@@ -28,7 +28,7 @@ void beacon(uint32_t freq, bool bCalMode)
     	char temp[sendLen * 2 + 1];
 
 		// scramble the data    	
-		for (int i= 0; i < sendLen; i++) binaryArray[i] = random(255);
+		for (int i= 0; i < sendLen; i++) binaryArray[i] = 0x00;		// all zeros- CW
 
         binToAscii(binaryArray, temp, sendLen);
         Serial.printf("%s:%d send %s\n", __FUNCTION__, __LINE__, temp);
