@@ -18,6 +18,7 @@
 #include <Arduino.h>
 #include "pretty.h"
 #include <ArduinoOTA.h>
+#include "bandcal.h"
 
 extern ArduinoOTAClass ArduinoOTA;
 
@@ -85,10 +86,24 @@ byte pc0LenConf;
 
 
 // NOTE: this is now expressed in hertz, not Smartnet vals
-int32_t hwTweakHz_300_348Mhz[2] = {   2000,    3000 };	// made up
-int32_t hwTweakHz_378_464Mhz[2] = {   3000,    4000 };	// made up
-int32_t hwTweakHz_779_899Mhz[2] = { -25261,  -25261 };	// CAL'd
-int32_t hwTweakHz_900_928Mhz[2] = {  52666,   52666 }; // CAL'd
+typedef struct CALPOINT
+{
+	// keep both as int for slope math
+	int32_t freq;  
+	int32_t cal;
+};
+
+typedef struct HI_LOW
+{
+	CALPOINT left;
+	CALPOINT right;
+};
+
+
+HI_LOW Band_300_348 = { {300000000,   2000} , {  348000000,  3000} };	// made up
+HI_LOW Band_378_464 = { {378000000,   3000} , {  464000000,  4000} };	// made up
+HI_LOW Band_779_899 = { {777600000,  -1820} , {  892800000, -2200} };	// CAL'd
+HI_LOW Band_900_928 = { {900000000,  -1950} , {  931318800, -2200} };   // CAL'd
 
 
 int16_t mirror[64];
@@ -538,7 +553,7 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , CONFIG_REG addr, byte valu
     digitalWrite(SS_PIN, HIGH);
     SpiEnd();
     
-    if (!bQuiet) Serial.printf(FG_WHITE "%s [0x%02X] %s now equals 0x%02X \n" FG_DONE, __FUNCTION__, addr, name, value);
+    if (!bQuiet) Serial.printf(FG_WHITE "\t%s [0x%02X] %s now equals 0x%02X \n" FG_DONE, __FUNCTION__, addr, name, value);
 }
 
 
@@ -1408,8 +1423,7 @@ void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent, bool bSkipBandCal)
 
 
 /****************************************************************
-* FUNCTION NAME:Calibrate
-* FUNCTION     :Calibrate frequency
+* FUNCTION NAME:AddBandCal
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
@@ -1419,14 +1433,17 @@ void ELECHOUSE_CC1101::AddBandCal(bool bSilent)
 	//CONFIG_FSCTRL0 = add offset to any setMHZ command BY HARDWARE!
 	//CONFIG_TEST0 = no clue. Too obtuse.
 
+	
 	const int32_t hzPerStep = (XTAL_Mhz * 1e6)/(float) (1<<14);
 	Serial.printf(FG_GREEN "\n%s hz/step = %d\n" FG_DONE, __FUNCTION__, hzPerStep); 
-	
+
+	int32_t freqHz = (uint32_t) (gMHz * 1e6);
 	
     if (gMHz >= 300 && gMHz <= 348)
     {
     	
-        int32_t offset =(CONFIG_FSCTRL0, map(gMHz, 300, 348, hwTweakHz_300_348Mhz[0], hwTweakHz_300_348Mhz[1]));
+        int32_t offset = REMAP(freqHz, Band_300_348.left.freq, Band_300_348.left.cal, Band_300_348.right.freq, Band_300_348.right.cal);
+
 		if (!bSilent) Serial.printf(FG_GREEN "%s 300->348 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
         
         SpiWriteReg(CONFIG_FSCTRL0, offset / hzPerStep);
@@ -1449,7 +1466,8 @@ void ELECHOUSE_CC1101::AddBandCal(bool bSilent)
     }
     else if (gMHz >= 378 && gMHz <= 464)
     {
-        int32_t offset =(CONFIG_FSCTRL0, map(gMHz, 378, 464, hwTweakHz_378_464Mhz[0], hwTweakHz_378_464Mhz[1]));
+        int32_t offset = REMAP(freqHz, Band_378_464.left.freq, Band_378_464.left.cal, Band_378_464.right.freq, Band_378_464.right.cal);
+
 		if (!bSilent) Serial.printf(FG_GREEN "%s 378->464 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
         
         SpiWriteReg(CONFIG_FSCTRL0, offset / hzPerStep);
@@ -1473,8 +1491,8 @@ void ELECHOUSE_CC1101::AddBandCal(bool bSilent)
     else if (gMHz >= 779 && gMHz <= 899.99)
     {
     
-		int32_t offset =(CONFIG_FSCTRL0, map(gMHz, 779, 899, hwTweakHz_779_899Mhz[0], hwTweakHz_779_899Mhz[1]));
-		if (!bSilent) Serial.printf(FG_GREEN "%s 779->899 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
+		int32_t offset = REMAP(freqHz, Band_779_899.left.freq, Band_779_899.left.cal, Band_779_899.right.freq, Band_779_899.right.cal);
+ 		if (!bSilent) Serial.printf(FG_GREEN "%s 779->899 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
 		
 		SpiWriteReg(CONFIG_FSCTRL0, offset / hzPerStep);
 	
@@ -1496,9 +1514,9 @@ void ELECHOUSE_CC1101::AddBandCal(bool bSilent)
     }
     else if (gMHz >= 900 && gMHz <= 928)
     {
+		int32_t offset = REMAP(freqHz, Band_900_928.left.freq, Band_900_928.left.cal, Band_900_928.right.freq, Band_900_928.right.cal);
 
-		int32_t offset =(CONFIG_FSCTRL0, map(gMHz, 900, 928, hwTweakHz_900_928Mhz[0], hwTweakHz_900_928Mhz[1]));
-		if (!bSilent) 
+ 		if (!bSilent) 
 		{
 			Serial.printf(FG_GREEN "%s 900->928 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
 			Serial.printf("note: %d %d\n", offset / hzPerStep,  (uint8_t)( offset / hzPerStep));
@@ -1524,27 +1542,27 @@ void ELECHOUSE_CC1101::AddBandCal(bool bSilent)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setCalibrationOffset(byte b, int32_t low, int32_t  high)
+void ELECHOUSE_CC1101::setCalibrationOffset(byte b, int32_t left, int32_t  right)
 {
     if (b == 1)
     {
-        hwTweakHz_300_348Mhz[0] = low;
-        hwTweakHz_300_348Mhz[1] = high;
+        Band_300_348.left.cal = left;
+        Band_300_348.right.cal = right;
     }
     else if (b == 2)
     {
-        hwTweakHz_378_464Mhz[0] = low;
-        hwTweakHz_378_464Mhz[1] = high;
+        Band_378_464.left.cal = left;
+        Band_378_464.right.cal = right;
     }
     else if (b == 3)
     {
-        hwTweakHz_779_899Mhz[0] = low;
-        hwTweakHz_779_899Mhz[1] = high;
+        Band_779_899.left.cal = left;
+        Band_779_899.right.cal = right;
     }
     else if (b == 4)
     {
-        hwTweakHz_900_928Mhz[0] = low;
-        hwTweakHz_900_928Mhz[1] = high;
+        Band_900_928.left.cal = left;
+        Band_900_928.right.cal = right;
     }
 }
 
