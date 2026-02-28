@@ -102,7 +102,7 @@ typedef struct HI_LOW
 
 HI_LOW Band_300_348 = { {300000000,   2000} , {  348000000,  3000} };	// made up
 HI_LOW Band_378_464 = { {378000000,   3000} , {  464000000,  4000} };	// made up
-HI_LOW Band_779_899 = { {792006330,  -8750} , {  900000000, -2730} };	// 792 ott beacon CAL'd
+HI_LOW Band_779_899 = { {792006330,  -8750+220} , {  900000000, -2730} };	// 792 ott beacon CAL'd
 HI_LOW Band_900_928 = { {900000000,  -2730} , {  931386000, -2000} };   // CAL'd
 
 
@@ -1028,6 +1028,16 @@ void ELECHOUSE_CC1101::setGDOx(byte gdo0, byte gdo2)
 }
 
 
+
+/****************************************************************
+* FUNCTION NAME:writeGDO0pin
+****************************************************************/
+void ELECHOUSE_CC1101::writeGDO0pin(bool bOn)
+{
+    digitalWrite(GDO0, bOn);
+}
+
+
 /****************************************************************
 * FUNCTION NAME:GDO0 Pin setting
 * FUNCTION     :set GDO0 Pin
@@ -1150,6 +1160,16 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES s)
 		setBaudRate(DEFAULT_BAUD);
 		assert(0);
 		
+    }
+    else if (ccmode == BEACON)
+    {
+		
+    	Serial.printf(FG_RED "%s: BEACON CONFIG ---------------\n" FG_DONE, __FUNCTION__);
+        ////setGDOxPinConfig(CONFIG_IOCFG0, 0x0D);	// serial data out
+        setPktFormat(3);
+        
+		setGDO0_hostpinMode(OUTPUT); // GDO drives the transmitter.
+
     }
     else if (ccmode == SYMBOL_TICK)
     {

@@ -26,7 +26,8 @@ typedef enum
     NOT_INITED,
     I_DUNNO,
     GDO0_isSYNC_TXEND,
-    SYMBOL_TICK
+    SYMBOL_TICK,
+    BEACON
 }eGDIO_MODES;
 
 typedef enum {
@@ -196,6 +197,8 @@ int getPktStatus(void);
 byte SpiReadStatus(STATUS_REG addr);
 void setSpiPin(byte sck, byte miso, byte mosi, byte ss);
 void setGDOx(byte gdo0, byte gdo2);
+void writeGDO0pin(bool bOn);
+
 void defineGDO0_pinNum(byte gdo0);
 void setTxFifoThreshold(uint8_t v);
 void setCCMode(eGDIO_MODES s);

@@ -5,7 +5,45 @@
 #include "keyboard.h"
 
 //-------------------------------------------------------------
-void beacon(uint32_t freq, bool bCalMode)
+
+void beaconByCW (uint32_t freq, bool bCalMode)
+{
+	radio.EnterIdleMode();
+	radio.setCCMode(BEACON);
+	
+	//normal becon op has NO Cal tweak.
+	radio.setFreqHz(freq, false, bCalMode);  // be quiet and skip band cal.
+	radio.setModulation(2); //ook
+
+	radio.setPA(-30);
+    radio.setGDO0_hostpinMode(OUTPUT);
+
+    radio.SpiStrobe(CC1101_STX);      //start send
+
+	for (int i= 0; i < 10; i++)
+	{
+		if (i & 1)
+		{
+			radio.writeGDO0pin(true);
+		}
+		else
+		{
+			radio.writeGDO0pin(false);
+		}
+		Serial.printf("%c", i&1 ? '+':'-');
+		delay(250);
+	}
+
+	
+	radio.writeGDO0pin(false);
+	
+    radio.SpiStrobe(CC1101_SIDLE);
+    radio.setGDO0_hostpinMode(INPUT);
+	
+}
+
+//-------------------------------------------------------------
+void beaconByFifo(uint32_t freq, bool bCalMode)
 {
 	byte binaryArray[50];
 	
@@ -51,6 +89,7 @@ uint32_t pwr(uint8_t exp)
 	return ret;
 }
 
+//-------------------------------------------------------------
 
 int32_t REMAP( int32_t freqHzIn, int32_t freqLeft, int32_t calLeft, int32_t freqRight, int32_t calRight)
 {
@@ -111,7 +150,7 @@ void bandCalKnob(int32_t startFreq)
 	delay(2000);
 	
 	Serial.printf(">>> initial >>> %d offset=%d %d decade=%d\n", frozen, startFreq - frozen, startFreq, digitSel);
-	beacon(startFreq, bCalMode);
+	beaconByCW(startFreq, bCalMode);
 
 	Serial.printf(FG_CYAN "Cal Ranges 300-348Mhz 378-464Mhz 779-899Mhz 900-928Mhz\n");
 	Serial.printf("see Band_779_899 etc\n\n" FG_DONE);
@@ -149,12 +188,12 @@ void bandCalKnob(int32_t startFreq)
 			
 			case LEFT:
 				startFreq -= pwr(digitSel);
-				beacon(startFreq, bCalMode);
+				beaconByCW(startFreq, bCalMode);
 			break;
 			
 			case RIGHT:
 				startFreq += pwr(digitSel);
-				beacon(startFreq, bCalMode);
+				beaconByCW(startFreq, bCalMode);
 			break;
 			
 		}
@@ -163,3 +202,5 @@ void bandCalKnob(int32_t startFreq)
 		
 	}
 }
+
+
