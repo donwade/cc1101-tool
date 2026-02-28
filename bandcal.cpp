@@ -5,7 +5,7 @@
 #include "keyboard.h"
 
 //-------------------------------------------------------------
-void beacon(uint32_t freq)
+void beacon(uint32_t freq, bool bCalMode)
 {
 	byte binaryArray[50];
 	
@@ -19,7 +19,7 @@ void beacon(uint32_t freq)
 	radio.setBaudRate(300);
 	
 	//normal becon op has NO Cal tweak.
-	radio.setFreqHz(freq, true, true);  // be quiet and skip band cal.
+	radio.setFreqHz(freq, false, bCalMode);  // be quiet and skip band cal.
 
 	radio.setPA(-30);
 	
@@ -77,13 +77,21 @@ int32_t REMAP( int32_t freqHzIn, int32_t freqLeft, int32_t calLeft, int32_t freq
 
 //-------------------------------------------------------------
 
-void bandCal(uint32_t startFreq)
+void bandCal(int32_t startFreq)
 {
 	int32_t tweaker = 0;
 	uint8_t digitSel = 3;
-
+	bool bCalMode = true;	// normal val for doing band cal.
+	
+	if (startFreq < 0) 
+	{
+		bCalMode = false;
+		startFreq = -startFreq;
+	}
+	
 	// specified Mhz or Hz?
 	if (startFreq < 1000) startFreq *= 1000000;
+
 
 	/*
 	int32_t foo = REMAP( 10, 1,1, 2,2);
@@ -103,7 +111,7 @@ void bandCal(uint32_t startFreq)
 	delay(2000);
 	
 	Serial.printf(">>> initial >>> %d offset=%d %d decade=%d\n", frozen, startFreq - frozen, startFreq, digitSel);
-	beacon(startFreq);
+	beacon(startFreq, bCalMode);
 
 	Serial.printf(FG_CYAN "Cal Ranges 300-348Mhz 378-464Mhz 779-899Mhz 900-928Mhz\n");
 	Serial.printf("see Band_779_899 etc\n\n" FG_DONE);
@@ -141,12 +149,12 @@ void bandCal(uint32_t startFreq)
 			
 			case LEFT:
 				startFreq -= pwr(digitSel);
-				beacon(startFreq);
+				beacon(startFreq, bCalMode);
 			break;
 			
 			case RIGHT:
 				startFreq += pwr(digitSel);
-				beacon(startFreq);
+				beacon(startFreq, bCalMode);
 			break;
 			
 		}

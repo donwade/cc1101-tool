@@ -103,7 +103,7 @@ typedef struct HI_LOW
 HI_LOW Band_300_348 = { {300000000,   2000} , {  348000000,  3000} };	// made up
 HI_LOW Band_378_464 = { {378000000,   3000} , {  464000000,  4000} };	// made up
 HI_LOW Band_779_899 = { {777600000,  -1820} , {  892800000, -2200} };	// CAL'd
-HI_LOW Band_900_928 = { {900000000,  -1950} , {  931318800, -2200} };   // CAL'd
+HI_LOW Band_900_928 = { {900000000,  -1950} , {  931386000, -2000} };   // CAL'd
 
 
 int16_t mirror[64];
@@ -1317,7 +1317,7 @@ void ELECHOUSE_CC1101::setPA(int needDb)
 
         paTableNumber = 3;
     }
-    else if (gMHz >= 900 && gMHz <= 928)
+    else if (gMHz >= 900 && gMHz <= 932)
     {
         if (needDb <= -30)
             maxPwrLvl = PA_TABLE_915[0];
@@ -1341,6 +1341,11 @@ void ELECHOUSE_CC1101::setPA(int needDb)
             maxPwrLvl = PA_TABLE_915[9];
 
         paTableNumber = 4;
+    }
+    else
+    {
+    	Serial.printf(FG_RED "***************** cannot handle this freq %f\n", gMHz);
+    	assert(0);
     }
 
 	assert(gModulation != -1);  // nobody set the moduation yet!!!
@@ -1381,6 +1386,8 @@ void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent, bool bSkipBandCal)
 {
    	uint32_t  temp;
 
+	Serial.printf("%s %d %d nnnnnnnnnnnnnnnnnnnnnnnnnn\n", __FUNCTION__, bSilent, bSkipBandCal);
+	
 	if (mhz == 0.0 ) mhz = gMHz;
 
 	temp = (( mhz  * (float)(1 << 16))/ XTAL_Mhz);
@@ -1402,10 +1409,14 @@ void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent, bool bSkipBandCal)
     {
     	//take away any band FREQUENCY aspect, zero it.
     	//range is ±202 kHz set to 0
+
+    	Serial.printf(FG_RED "%s SKIP band calibration\n" FG_DONE, __FUNCTION__);
     	SpiWriteReg(CONFIG_FSCTRL0, 0);
-    	Serial.printf(FG_RED "%s skipping band calibration\n" FG_DONE, __FUNCTION__);
 	}
-	
+	else
+	{
+    	Serial.printf(FG_RED "%s USING band calibration\n" FG_DONE, __FUNCTION__);
+	}
 #if 0
 	// verify.
 	uint32_t tweaked = SpiReadReg(CONFIG_FREQ2) << 16 | SpiReadReg(CONFIG_FREQ1)  << 8 | SpiReadReg(CONFIG_FREQ0);
@@ -1429,7 +1440,8 @@ void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent, bool bSkipBandCal)
 ****************************************************************/
 void ELECHOUSE_CC1101::AddBandCal(bool bSilent)
 {
-
+	bSilent = false;
+	
 	//CONFIG_FSCTRL0 = add offset to any setMHZ command BY HARDWARE!
 	//CONFIG_TEST0 = no clue. Too obtuse.
 
@@ -1512,13 +1524,12 @@ void ELECHOUSE_CC1101::AddBandCal(bool bSilent)
                 setPA(usrPwrLvlDb);
         }
     }
-    else if (gMHz >= 900 && gMHz <= 928)
+    else if (gMHz >= 900 && gMHz <= 932)  //opened up a bit from 928
     {
 		int32_t offset = REMAP(freqHz, Band_900_928.left.freq, Band_900_928.left.cal, Band_900_928.right.freq, Band_900_928.right.cal);
-
  		if (!bSilent) 
 		{
-			Serial.printf(FG_GREEN "%s 900->928 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
+			Serial.printf(FG_GREEN "%s 900->932 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, offset, gMHz, gMHz+ (float) offset/1000000. ); 
 			Serial.printf("note: %d %d\n", offset / hzPerStep,  (uint8_t)( offset / hzPerStep));
 		}	
 		
@@ -1533,6 +1544,11 @@ void ELECHOUSE_CC1101::AddBandCal(bool bSilent)
         if (paTableNumber != 4)
             setPA(usrPwrLvlDb);
     }
+	else
+	{
+		Serial.printf(FG_RED "%s:%d *************** cant handle freq %f\n", __FUNCTION__, __LINE__, gMHz);
+		delay(5000);
+	}
 }
 
 
