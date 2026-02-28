@@ -46,13 +46,13 @@
 #define FG_DWHITE      "\033[2;37m"
 
 // FLASH COLOUR
-#define FG_FRED        "\033[3;31m"
-#define FG_FGREEN      "\033[3;32m"
-#define FG_FYELLOW     "\033[3;33m"
-#define FG_FBLUE       "\033[3;34m"
-#define FG_FMAGENTA    "\033[3;35m"
-#define FG_FCYAN       "\033[3;36m"
-#define FG_FWHITE      "\033[3;37m"
+#define FG_FRED        "\033[5;31m"
+#define FG_FGREEN      "\033[5;32m"
+#define FG_FYELLOW     "\033[5;33m"
+#define FG_FBLUE       "\033[5;34m"
+#define FG_FMAGENTA    "\033[5;35m"
+#define FG_FCYAN       "\033[5;36m"
+#define FG_FWHITE      "\033[5;37m"
 
 #define BG_RED        "\033[0;41m"
 #define BG_GREEN      "\033[0;42m"

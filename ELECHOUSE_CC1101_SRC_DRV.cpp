@@ -102,8 +102,8 @@ typedef struct HI_LOW
 
 HI_LOW Band_300_348 = { {300000000,   2000} , {  348000000,  3000} };	// made up
 HI_LOW Band_378_464 = { {378000000,   3000} , {  464000000,  4000} };	// made up
-HI_LOW Band_779_899 = { {777600000,  -1820} , {  892800000, -2200} };	// CAL'd
-HI_LOW Band_900_928 = { {900000000,  -1950} , {  931386000, -2000} };   // CAL'd
+HI_LOW Band_779_899 = { {792006330,  -8280} , {  900000000, -2730} };	// 792 ott beacon CAL'd
+HI_LOW Band_900_928 = { {900000000,  -2730} , {  931386000, -2000} };   // CAL'd
 
 
 int16_t mirror[64];
@@ -1292,7 +1292,7 @@ void ELECHOUSE_CC1101::setPA(int needDb)
 
         paTableNumber = 2;
     }
-    else if (gMHz >= 779 && gMHz <= 899.99)
+    else if (gMHz >= 779 && gMHz < 900)
     {
         if (needDb <= -30)
             maxPwrLvl = PA_TABLE_868[0];
@@ -1385,10 +1385,9 @@ void ELECHOUSE_CC1101::setFreqHz(uint32_t mhz, bool bSilent, bool bSkipBandCal)
 void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent, bool bSkipBandCal)
 {
    	uint32_t  temp;
-
-	Serial.printf("%s %d %d nnnnnnnnnnnnnnnnnnnnnnnnnn\n", __FUNCTION__, bSilent, bSkipBandCal);
-	
 	if (mhz == 0.0 ) mhz = gMHz;
+	
+	if (mhz > 866 && mhz < 868) Serial.printf(FG_FRED "***** DANGER TX FREQ = %f\n" FG_DONE, gMHz);
 
 	temp = (( mhz  * (float)(1 << 16))/ XTAL_Mhz);
 
@@ -1409,14 +1408,11 @@ void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent, bool bSkipBandCal)
     {
     	//take away any band FREQUENCY aspect, zero it.
     	//range is ±202 kHz set to 0
-
-    	Serial.printf(FG_RED "%s SKIP band calibration\n" FG_DONE, __FUNCTION__);
     	SpiWriteReg(CONFIG_FSCTRL0, 0);
 	}
-	else
-	{
-    	Serial.printf(FG_RED "%s USING band calibration\n" FG_DONE, __FUNCTION__);
-	}
+	
+	Serial.printf(FG_FRED "%s freq compensation %s\n" FG_DONE, __FUNCTION__, bSkipBandCal ?"OFF":"ON");
+
 #if 0
 	// verify.
 	uint32_t tweaked = SpiReadReg(CONFIG_FREQ2) << 16 | SpiReadReg(CONFIG_FREQ1)  << 8 | SpiReadReg(CONFIG_FREQ0);
@@ -1500,7 +1496,7 @@ void ELECHOUSE_CC1101::AddBandCal(bool bSilent)
                 setPA(usrPwrLvlDb);
         }
     }
-    else if (gMHz >= 779 && gMHz <= 899.99)
+    else if (gMHz >= 779 && gMHz < 900)
     {
     
 		int32_t offset = REMAP(freqHz, Band_779_899.left.freq, Band_779_899.left.cal, Band_779_899.right.freq, Band_779_899.right.cal);
@@ -2550,13 +2546,12 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::EnterTxMode(void)
 {
-	Serial.printf("************* Enter tx mode \n");
+    Serial.printf(FG_FYELLOW "%s: TX MODE !!!! \n" FG_DONE, __FUNCTION__);
     SpiStrobe(CC1101_SIDLE);
     setMHZ(gMHz);
     
     SpiStrobe(CC1101_STX);      //start send
     
-    Serial.printf(FG_FYELLOW "%s: TX MODE !!!! \n", __FUNCTION__);
     trxstate = MODEM_TX;
 
     
@@ -2572,11 +2567,11 @@ void ELECHOUSE_CC1101::EnterTxMode(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::EnterRxMode(void)
 {
-	Serial.printf("************** EnterRxMode ****\n");
+    Serial.printf(FG_FYELLOW "%s: RX MODE !!!! \n" FG_DONE, __FUNCTION__);
+    
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_SRX);      //start receive
     
-    Serial.printf(FG_FYELLOW "%s: RX MODE !!!! \n", __FUNCTION__);
     trxstate = MODEM_RX;
     
     getState();
@@ -2590,12 +2585,11 @@ void ELECHOUSE_CC1101::EnterRxMode(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::EnterRxMode(float mhz)
 {
-	Serial.printf("************* EnterRxMode + FREQ = %f ****\n", mhz);
+    Serial.printf(FG_FYELLOW "%s: RX MODE @ %s !!!! \n" FG_DONE, __FUNCTION__, mhz);
     SpiStrobe(CC1101_SIDLE);
     setMHZ(mhz);
     SpiStrobe(CC1101_SRX);      //start receive
     
-    Serial.printf(FG_FYELLOW "%s: RX MODE + freq !!!! \n", __FUNCTION__);
     trxstate = MODEM_RX;
     
     getState();
@@ -2824,7 +2818,7 @@ void ELECHOUSE_CC1101::EnterIdleMode(void)
     SpiStrobe(CC1101_SIDLE);
     trxstate = MODEM_IDLE;
     
-    Serial.printf(FG_FYELLOW "%s: IDLE !!!! \n", __FUNCTION__);
+    Serial.printf(FG_FYELLOW "%s: IDLE !!!! \n" FG_DONE, __FUNCTION__);
     getState();
 }
 
@@ -2840,7 +2834,7 @@ void ELECHOUSE_CC1101::goSleep(void)
     SpiStrobe(0x36);    //Exit RX / TX, turn off frequency synthesizer and exit
     SpiStrobe(0x39);    //Enter power down mode when CSn goes high.
     
-    Serial.printf(FG_FYELLOW "%s: SLEEP !!!! \n", __FUNCTION__);
+    Serial.printf(FG_FYELLOW "%s: SLEEP !!!! \n" FG_DONE, __FUNCTION__);
 }
 
 
@@ -2877,7 +2871,6 @@ void ELECHOUSE_CC1101::SendDataCppString(String &txchar)
 ****************************************************************/
 void ELECHOUSE_CC1101::SendBinaryData(byte *txBuffer, byte size)
 {
-	if (gMHz > 866 && gMHz < 868) Serial.printf("***** DANGER TX FREQ = %f\n", gMHz);
 
 /*
 	static bool bDebugWTF = false;

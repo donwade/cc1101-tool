@@ -77,7 +77,7 @@ int32_t REMAP( int32_t freqHzIn, int32_t freqLeft, int32_t calLeft, int32_t freq
 
 //-------------------------------------------------------------
 
-void bandCal(int32_t startFreq)
+void bandCalKnob(int32_t startFreq)
 {
 	int32_t tweaker = 0;
 	uint8_t digitSel = 3;

@@ -972,7 +972,7 @@ static void exec(char *input)
     	if (temp)
     	{
 	    	uint32_t startFreq = atoi(temp);
-    		bandCal(startFreq);
+    		bandCalKnob(startFreq);
     	}
     	else
     	{
