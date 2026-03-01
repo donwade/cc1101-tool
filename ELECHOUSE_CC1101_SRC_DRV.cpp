@@ -102,8 +102,13 @@ typedef struct HI_LOW
 
 HI_LOW Band_300_348 = { {300000000,   2000} , {  348000000,  3000} };	// made up
 HI_LOW Band_378_464 = { {378000000,   3000} , {  464000000,  4000} };	// made up
-HI_LOW Band_779_899 = { {792006330,  -8750+220} , {  900000000, -2730} };	// 792 ott beacon CAL'd
-HI_LOW Band_900_928 = { {900000000,  -2730} , {  931386000, -2000} };   // CAL'd
+
+// area i want accuracy
+HI_LOW Band_779_899 = { {866087500,  -1000} , {  867887500, -1100} };
+HI_LOW xxxx_779_899 = { {792006330,      0} , {  900000000,     0} };
+
+// don't use this. don't care
+HI_LOW Band_900_928 = { {900000000,  -10180} , {  931802000, -10620} };   // CAL'd
 
 
 int16_t mirror[64];
@@ -1422,12 +1427,12 @@ void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent, bool bSkipBandCal)
     	//take away any band FREQUENCY aspect, zero it.
     	//range is ±202 kHz set to 0
     	SpiWriteReg(CONFIG_FSCTRL0, 0);
-		Serial.printf(FG_FRED "%s  requested %9.6f passthru\n" FG_DONE, __FUNCTION__, mhz);
+		Serial.printf(FG_RED "%s  requested %9.6f passthru\n" FG_DONE, __FUNCTION__, mhz);
 	}
 	else
 	{
 		// tweek in play. Normal operation.
-		Serial.printf(FG_FRED "%s  requested %9.6f becomes %9.6f\n" FG_DONE, __FUNCTION__, mhz, mhz + (float) tweak / 1000000.);
+		Serial.printf(FG_RED "%s  requested %9.6f becomes %9.6f\n" FG_DONE, __FUNCTION__, mhz, mhz + (float) tweak / 1000000.);
 		mhz += (float) tweak / 1000000.;
 	}
 	
@@ -2682,7 +2687,7 @@ int ELECHOUSE_CC1101::getPktStatus(void)
 	if (last != orig)
 	{
 		last = orig;
-		Serial.printf("T=%10d CarrierSense=%d PreambleQuality=%d ClearChannelAssmt=%d SyncOrPakt=%d RSSI=%3d\n", 
+		Serial.printf("T=%5d CSense=%d PQual=%d ClearChan=%d SyncOrPktDone=%d RSSI=%3d\n", 
 				delta, bCarrierSense, bPQTpass, bCCA, bSyncNpacket, getRssi());
 	}
 
@@ -2691,7 +2696,7 @@ int ELECHOUSE_CC1101::getPktStatus(void)
 	if (rssi > lastRssi )
 	{
 		lastRssi = rssi + 10;
-		Serial.printf("T=%10d CarrierSense=%d PreambleQuality=%d ClearChannelAssmt=%d SyncOrPakt=%d RSSI=%3d\n", 
+		Serial.printf("T=%5d CSense=%d PQual=%d ClearChan=%d SyncOrPktDone=%d RSSI=%3d\n", 
 				delta, bCarrierSense, bPQTpass, bCCA, bSyncNpacket, rssi);
 	}
 

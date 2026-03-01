@@ -966,7 +966,7 @@ static void exec(char *input)
     {
     	txSendByFifos();
     }
-    else if (strcmp_P(cmd, PSTR("cal2")) == 0)
+    else if (strcmp_P(cmd, PSTR("cal-CW")) == 0)
     {
     	char *temp = strsep(&cmd_args, " ");
     	if (temp)
@@ -979,7 +979,7 @@ static void exec(char *input)
     		Serial.printf("cal2 requires a start freq\n");
     	}
     }
-	else if (strcmp_P(cmd, PSTR("cal")) == 0)
+	else if (strcmp_P(cmd, PSTR("cal-pkt")) == 0)
 	{
     	byte binaryArray[50];
 

@@ -99,21 +99,11 @@ int32_t REMAP( int32_t freqHzIn, int32_t freqLeft, int32_t calLeft, int32_t freq
 
 	double y = calLeft - (slope * (double)(freqLeft - freqHzIn)) ; // + (double) calLeft;
 
-#if 0
-	Serial.printf("dFreq = %d\n", dFreq);
-	Serial.printf("dCal = %d\n", dCal);
-	Serial.printf("slope = %f\n", slope);
-	
-
-#endif
-
 	Serial.printf("IN %d  LHS=[%d %d] RHS=[%d %d] OUT= %f\n",  
 			freqHzIn, freqLeft, calLeft, freqRight, calRight, y);
 
 	return y;	
-
 }
-
 //-------------------------------------------------------------
 
 void bandCalKnob(int32_t startFreq)
@@ -121,6 +111,10 @@ void bandCalKnob(int32_t startFreq)
 	int32_t tweaker = 0;
 	uint8_t digitSel = 3;
 	bool bCalMode = true;	// normal val for doing band cal.
+	Serial.printf(FG_YELLOW "%s negative freq for test with compensation table\n");
+	Serial.printf(" positive freq for disable compensation table\n");
+	Serial.printf(" val < 1000, freq in mhz\n");
+	Serial.printf(" val > 1000, freq in Hz\n");
 	
 	if (startFreq < 0) 
 	{
@@ -131,20 +125,6 @@ void bandCalKnob(int32_t startFreq)
 	// specified Mhz or Hz?
 	if (startFreq < 1000) startFreq *= 1000000;
 
-
-	/*
-	int32_t foo = REMAP( 10, 1,1, 2,2);
-	
-	 foo = REMAP( -10,   1, 1,  2, 2);
-	 foo = REMAP( 100, 100,15, 200,25);
-	 foo = REMAP(  70, 100,15, 200,25);
-	 foo = REMAP( 200, 100,15, 200,25);
-	 
-	 foo = REMAP(  15, 100,15, 200,25);
- 	 foo = REMAP(  30, 100,15, 200,25);
- 	*/
-
- 	
 	uint32_t frozen = startFreq;
 	Serial.printf("\tuse left/right arrows to adj\n\tuse up/down to adj 10's\n\tspace to exit\n");
 	delay(2000);
