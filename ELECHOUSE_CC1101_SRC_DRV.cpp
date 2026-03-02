@@ -30,6 +30,9 @@ SemaphoreHandle_t sem_GDO0_DN = xSemaphoreCreateBinary();
 SemaphoreHandle_t sem_GDO2_UP = xSemaphoreCreateBinary();
 SemaphoreHandle_t sem_GDO2_DN = xSemaphoreCreateBinary();
 
+SemaphoreHandle_t sem_GDO0_CH = xSemaphoreCreateBinary();
+SemaphoreHandle_t sem_GDO2_CH = xSemaphoreCreateBinary();
+
 bool GDO0_waitFalling();
 bool GDO0_waitRising();
 bool GDO2_waitFalling();
@@ -37,14 +40,19 @@ bool GDO2_waitRising();
 
 bool bGDO0_HasFallingCallback;
 bool bGDO0_HasRisingCallback;
+bool bGDO0_HasChangingCallback;
+
 bool bGDO2_HasFallingCallback;
 bool bGDO2_HasRisingCallback;
-
+bool bGDO2_HasChangingCallback;
 
 uint32_t irqUpCtrGDO0;
 uint32_t irqDnCtrGDO0;
+uint32_t irqChgCtrGDO0;
+
 uint32_t irqUpCtrGDO2;
 uint32_t irqDnCtrGDO2;
+uint32_t irqChgCtrGDO2;
 
 static uint32_t irqLastTimeGDO0;
 static uint32_t irqLastTimeGDO2;
@@ -329,6 +337,7 @@ void ELECHOUSE_CC1101::DumpRegs(void)
 		Serial.println();
 	}
 }
+ 
 //-------------------------------------------------------------
 
 ICACHE_RAM_ATTR void onGDO0_IRQ(void)
@@ -338,8 +347,14 @@ ICACHE_RAM_ATTR void onGDO0_IRQ(void)
 	irqDeltaTimeGDO0 = now - irqLastTimeGDO0;
 	irqLastTimeGDO0 = now;
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+	if (bGDO0_HasChangingCallback)
+	{
+		irqChgCtrGDO0++;
+		xSemaphoreGiveFromISR( sem_GDO0_CH, &xHigherPriorityTaskWoken );
 	
-	if (digitalRead(GDO0))
+	}
+	else if (digitalRead(GDO0))
 	{
 		if (bGDO0_HasRisingCallback)
 		{
@@ -359,7 +374,7 @@ ICACHE_RAM_ATTR void onGDO0_IRQ(void)
 	// wake up task that needs it.
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
 }
-
+ 
 //-------------------------------------------------------------
 
 ICACHE_RAM_ATTR void onGDO2_IRQ(void)
@@ -369,8 +384,14 @@ ICACHE_RAM_ATTR void onGDO2_IRQ(void)
 	irqDeltaTimeGDO2 = now - irqLastTimeGDO2;
 	irqLastTimeGDO2 = now;
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+	if (bGDO2_HasChangingCallback)
+	{
+		irqChgCtrGDO2++;
+		xSemaphoreGiveFromISR( sem_GDO2_CH, &xHigherPriorityTaskWoken );
 	
-	if (digitalRead(GDO2))
+	}
+	else if (digitalRead(GDO2))
 	{
 		if (bGDO2_HasRisingCallback)
 		{
@@ -461,6 +482,16 @@ void ELECHOUSE_CC1101::setGDO2_hostpinMode(int8_t direction)
 	Serial.printf("\nGDO2 pin %d set to %s\n", GDO2, direction == INPUT? "INPUT":"OUTPUT");
     pinMode(GDO2, direction);
 }
+
+bool ELECHOUSE_CC1101::digitalReadGDO2(void)
+{
+    return digitalRead(GDO2);
+}
+bool ELECHOUSE_CC1101::digitalReadGDO0(void)
+{
+    return digitalRead(GDO0);
+}
+
 
 
 /****************************************************************
@@ -628,7 +659,7 @@ ONE okay[] =
 
 
 
-uint8_t ELECHOUSE_CC1101::SpiStrobe(byte commandStrobe, bool bSilent)
+uint8_t ELECHOUSE_CC1101::SpiStrobe(STROBE_REG commandStrobe, bool bSilent)
 {
     SpiStart();
 	assert(commandStrobe != 0x3B);
@@ -641,8 +672,12 @@ uint8_t ELECHOUSE_CC1101::SpiStrobe(byte commandStrobe, bool bSilent)
     }
 
 	// commands are 0x30 and above. Configurations are 0x2F and below
-	assert(commandStrobe > 0x2F);
-	
+	if (commandStrobe < 0x30)
+	{
+		Serial.printf("WTF: command strobe = 0x%X \n", commandStrobe);
+		delay(10000);
+		assert(0);
+	}
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
 
@@ -832,6 +867,46 @@ void ELECHOUSE_CC1101::enableFallingIRQ_GDO0(bool bEnable)
 }
 
 /****************************************************************
+* FUNCTION NAME:GDO0 IRQ changing callback
+****************************************************************/
+void ELECHOUSE_CC1101::enableChangingIRQ_GDO0(bool bEnable)
+{
+	Serial.printf(FG_FYELLOW);
+	
+	if (bEnable)
+	{
+		bGDO0_HasChangingCallback = true;
+	    if (irqDirGDO0 == CHANGE )
+	    {
+			Serial.printf("%s no change\n", __FUNCTION__);
+			Serial.printf(FG_DONE);
+	    	return;
+	    }
+
+	    irqChgCtrGDO0 = 0;
+
+	   	attachInterrupt(GDO0, onGDO0_IRQ, CHANGE);
+	   	irqDirGDO0 = CHANGE;
+		Serial.printf("%s CHANGE mode\n", __FUNCTION__);
+	   	
+	}
+	else
+	{
+		bGDO0_HasChangingCallback = false;
+		//disconnecting.
+		if (irqDirGDO0 == CHANGE )
+		{
+			detachInterrupt(GDO0);
+			
+			Serial.printf("%s DETACHED\n", __FUNCTION__);
+			Serial.printf(FG_DONE);
+			return;
+		}
+	}
+	Serial.printf(FG_DONE);
+}
+
+/****************************************************************
 * FUNCTION NAME:GDO0 IRQ rising callback
 ****************************************************************/
 void ELECHOUSE_CC1101::enableRisingIRQ_GDO0(bool bEnable)
@@ -991,6 +1066,46 @@ void ELECHOUSE_CC1101::enableRisingIRQ_GDO2(bool bEnable)
 	Serial.printf(FG_DONE);
 }
 
+/****************************************************************
+* FUNCTION NAME:GDO2 IRQ changing callback
+****************************************************************/
+void ELECHOUSE_CC1101::enableChangingIRQ_GDO2(bool bEnable)
+{
+	Serial.printf(FG_FYELLOW);
+	
+	if (bEnable)
+	{
+		bGDO2_HasChangingCallback = true;
+	    if (irqDirGDO2 == CHANGE )
+	    {
+			Serial.printf("%s no change\n", __FUNCTION__);
+			Serial.printf(FG_DONE);
+	    	return;
+	    }
+
+	    irqChgCtrGDO2 = 0;
+
+	   	attachInterrupt(GDO2, onGDO2_IRQ, CHANGE);
+	   	irqDirGDO2 = CHANGE;
+		Serial.printf("%s CHANGE mode\n", __FUNCTION__);
+	   	
+	}
+	else
+	{
+		bGDO2_HasChangingCallback = false;
+		//disconnecting.
+		if (irqDirGDO2 == CHANGE )
+		{
+			detachInterrupt(GDO2);
+			
+			Serial.printf("%s DETACHED\n", __FUNCTION__);
+			Serial.printf(FG_DONE);
+			return;
+		}
+	}
+	Serial.printf(FG_DONE);
+}
+
 
 bool ELECHOUSE_CC1101::wait4RisingIRQ_GDO0(void)
 {
@@ -1004,6 +1119,12 @@ bool ELECHOUSE_CC1101::wait4FallingIRQ_GDO0(void)
 	return (ret1 == pdTRUE) ? true : false;
 }
 
+bool ELECHOUSE_CC1101::wait4ChangingIRQ_GDO0(void)
+{
+	int ret1 = xSemaphoreTake( sem_GDO0_CH, pdMS_TO_TICKS(3000));
+	return (ret1 == pdTRUE) ? true : false;
+}
+
 bool ELECHOUSE_CC1101::wait4RisingIRQ_GDO2(void)
 {
 	int ret1 = xSemaphoreTake( sem_GDO2_UP, pdMS_TO_TICKS(3000));
@@ -1013,6 +1134,12 @@ bool ELECHOUSE_CC1101::wait4RisingIRQ_GDO2(void)
 bool ELECHOUSE_CC1101::wait4FallingIRQ_GDO2(void)
 {
 	int ret1 = xSemaphoreTake( sem_GDO2_DN, pdMS_TO_TICKS(3000));
+	return (ret1 == pdTRUE) ? true : false;
+}
+
+bool ELECHOUSE_CC1101::wait4ChangingIRQ_GDO2(void)
+{
+	int ret1 = xSemaphoreTake( sem_GDO2_CH, pdMS_TO_TICKS(3000));
 	return (ret1 == pdTRUE) ? true : false;
 }
 
@@ -2115,7 +2242,7 @@ void ELECHOUSE_CC1101::setSyncMode(byte v)
    {
 		"No preamble/sync. ",
 	   	"16 sync word bits detected. ",
-	   	"16/16 sync word bits detected. ",
+	   	"15/16 sync word bits detected. ",
 	   	"30/32 sync word bits detected. ",
 	   	"No preamble/sync, carrier-sense above threshold. ",
 	   	"15/16 + carrier-sense above threshold. ",
@@ -2485,7 +2612,7 @@ void ELECHOUSE_CC1101::setSymbolSpacingHz(float HzBetweenSymbol)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setDeviation_FSK2(float fdev)
+void ELECHOUSE_CC1101::setDeviation(float fdev)
 {
 	int16_t exp;
 	float mantissa;
@@ -2606,6 +2733,7 @@ void ELECHOUSE_CC1101::EnterRxMode(void)
     Serial.printf(FG_FYELLOW "%s: RX MODE !!!! \n" FG_DONE, __FUNCTION__);
     
     SpiStrobe(CC1101_SIDLE);
+    SpiStrobe(CC1101_SFRX); // flush rx fifo
     SpiStrobe(CC1101_SRX);      //start receive
     
     trxstate = MODEM_RX;
@@ -2631,6 +2759,19 @@ void ELECHOUSE_CC1101::EnterRxMode(float mhz)
     getState();
 }
 
+
+/****************************************************************
+* FUNCTION NAME:getCarrierDev
+* FUNCTION     :Calculating the RSSI Level
+* INPUT        :none
+* OUTPUT       :none
+****************************************************************/
+float ELECHOUSE_CC1101::getCarrierDev(void)
+{
+	int8_t read = radio.SpiReadStatus(STATUS_FREQEST);
+	float fdev = (XTAL_Hz/(float)(1<<14)) * (float)(read);
+	return fdev;
+}
 
 /****************************************************************
 * FUNCTION NAME:RSSI Level
@@ -2867,8 +3008,8 @@ void ELECHOUSE_CC1101::EnterIdleMode(void)
 void ELECHOUSE_CC1101::goSleep(void)
 {
     trxstate = MODEM_IDLE;
-    SpiStrobe(0x36);    //Exit RX / TX, turn off frequency synthesizer and exit
-    SpiStrobe(0x39);    //Enter power down mode when CSn goes high.
+    SpiStrobe(CC1101_SIDLE);    //Exit RX / TX, turn off frequency synthesizer and exit
+    SpiStrobe(CC1101_SPWD);    //Enter power down mode when CSn goes high.
     
     Serial.printf(FG_FYELLOW "%s: SLEEP !!!! \n" FG_DONE, __FUNCTION__);
 }
@@ -2989,25 +3130,23 @@ bool ELECHOUSE_CC1101::CheckCRC(void)
 
 
 /****************************************************************
-* FUNCTION NAME:CheckRxFifo
+* FUNCTION NAME:GetRxFifoCount
 * FUNCTION     :check receive data or not
 * INPUT        :none
 * OUTPUT       :flag: 0 no data; 1 receive data
 ****************************************************************/
-bool ELECHOUSE_CC1101::CheckRxFifo(int t)
+uint8_t ELECHOUSE_CC1101::GetRxFifoCount(bool &oflow)
 {
     if (trxstate != MODEM_RX)
         EnterRxMode();
 
-    if (SpiReadStatus(STATUS_RXBYTES) & BYTES_IN_RXFIFO)
-    {
-        delay(t);
-        return 1;
-    }
-    else
-    {
-        return 0;
-    }
+	uint8_t var = SpiReadStatus(STATUS_RXBYTES);
+
+	if (var & 0x80) Serial.printf(FG_FRED "%s OVERFLOW \n" FG_DONE, __FUNCTION__);
+
+	oflow = !!(var & 0x80);
+	
+	return var & 0x7F;
 }
 
 

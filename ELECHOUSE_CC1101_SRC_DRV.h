@@ -122,29 +122,30 @@ typedef enum CONFIG_REG
 };
 
 //CC1101 Strobe commands
-#define CC1101_SRES         0x30        // Reset chip.
-#define CC1101_SFSTXON      0x31        // Enable and calibrate frequency synthesizer (if MCSM0.FS_AUTOCAL=1).
-                                        // If in RX/TX: Go to a wait state where only the synthesizer is
-                                        // running (for quick RX / TX turnaround).
-#define CC1101_SXOFF        0x32        // Turn off crystal oscillator.
-#define CC1101_SCAL         0x33        // Calibrate frequency synthesizer and turn it off
-                                        // (enables quick start).
-#define CC1101_SRX          0x34        // Enable RX. Perform calibration first if coming from IDLE and
-                                        // MCSM0.FS_AUTOCAL=1.
-#define CC1101_STX          0x35        // In IDLE state: Enable TX. Perform calibration first if
-                                        // MCSM0.FS_AUTOCAL=1. If in RX state and CCA is enabled:
-                                        // Only go to TX if channel is clear.
-#define CC1101_SIDLE        0x36        // Exit RX / TX, turn off frequency synthesizer and exit
-                                        // Wake-On-Radio mode if applicable.
-#define CC1101_SAFC         0x37        // Perform AFC adjustment of the frequency synthesizer
-#define CC1101_SWOR         0x38        // Start automatic RX polling sequence (Wake-on-Radio)
-#define CC1101_SPWD         0x39        // Enter power down mode when CSn goes high.
-#define CC1101_SFRX         0x3A        // Flush the RX FIFO buffer.
-#define CC1101_SFTX         0x3B        // Flush the TX FIFO buffer.
-#define CC1101_SWORRST      0x3C        // Reset real time clock.
-#define CC1101_SNOP         0x3D        // No operation. May be used to pad strobe commands to two
-                                        // INT8Us for simpler software.
-
+typedef enum STROBE_REG 
+{
+    CC1101_SRES  =0x30  ,   //0x30 Reset chip.
+    CC1101_SFSTXON      ,   //0x31 Enable and calibrate frequency synthesizer (if MCSM0.FS_AUTOCAL=1).
+                            //     If in RX/TX: Go to a wait state where only the synthesizer is
+                            //     running (for quick RX / TX turnaround).
+    CC1101_SXOFF        ,   //0x32 Turn off crystal oscillator.
+    CC1101_SCAL         ,   //0x33 Calibrate frequency synthesizer and turn it off
+                            //       (enables quick start).
+    CC1101_SRX          ,   //0x34 Enable RX. Perform calibration first if coming from IDLE and
+                            //          MCSM0.FS_AUTOCAL=1.
+    CC1101_STX          ,   //0x35 In IDLE state: Enable TX. Perform calibration first if
+                            //       MCSM0.FS_AUTOCAL=1. If in RX state and CCA is enabled:
+                            //       Only go to TX if channel is clear.
+    CC1101_SIDLE        ,   //0x36 Exit RX / TX, turn off frequency synthesizer and exit Wake-On-Radio mode if applicable.
+    CC1101_SAFC         ,   //0x37 Perform AFC adjustment of the frequency synthesizer
+    CC1101_SWOR         ,   //0x38 Start automatic RX polling sequence (Wake-on-Radio)
+    CC1101_SPWD         ,   //0x39 Enter power down mode when CSn goes high.
+    CC1101_SFRX         ,   //0x3A Flush the RX FIFO buffer.
+    CC1101_SFTX         ,   //0x3B Flush the TX FIFO buffer.
+    CC1101_SWORRST      ,   //0x3C Reset real time clock.
+    CC1101_SNOP             //0x3D No operation. May be used to pad strobe commands to two
+                            //      INT8Us for simpler software.
+};
 
 //CC1101 STATUS REGSITER
 
@@ -222,26 +223,32 @@ void setGDOxPinConfig(uint8_t reg, uint8_t value, bool bSilent=false);
 
 void enableRisingIRQ_GDO0(bool bEnable);
 void enableFallingIRQ_GDO0(bool bEnable);
+void enableChangingIRQ_GDO0(bool bEnable);
 
 void enableRisingIRQ_GDO2(bool bEnable);
 void enableFallingIRQ_GDO2(bool bEnable);
+void enableChangingIRQ_GDO2(bool bEnable);
 
 bool wait4RisingIRQ_GDO0(void);
 bool wait4FallingIRQ_GDO0(void);
+bool wait4ChangingIRQ_GDO0(void);
 
 bool wait4RisingIRQ_GDO2(void);
 bool wait4FallingIRQ_GDO2(void);
+bool wait4ChangingIRQ_GDO2(void);
 
 void setLogicalChanNum(byte chnl);
 void setChannelSpacing(float f);
 void setRxBW(float f);
 void setBaudRate(uint32_t d);
-void setDeviation_FSK2(float d);
+void setDeviation(float d);
 void setSymbolSpacingHz(float d);
 void EnterTxMode(void);
 void EnterRxMode(void);
 void EnterRxMode(float mhz);
 int getRssi(void);
+float getCarrierDev(void);
+
 byte getLqi(void);
 byte getState(bool bSilent = true);
 
@@ -258,7 +265,7 @@ byte CheckReceiveFlag(void);
 byte ReceiveData(byte *rxBuffer);
 bool CheckCRC(void);
 
-uint8_t SpiStrobe(byte strobe, bool bSilent=true);
+uint8_t SpiStrobe(STROBE_REG strobe, bool bSilent=true);
 
 void _SpiWriteReg(const char*name, CONFIG_REG addr, byte value, bool bQuiet=false);
 void SpiWriteBurstReg(CONFIG_REG addr, byte *buffer, byte num);
@@ -283,9 +290,13 @@ void setPQT(byte v);
 void setCRC_AF(bool v);
 void setAppendStatus(bool v);
 void setAdrChk(byte v);
-bool CheckRxFifo(int t);
+uint8_t GetRxFifoCount(bool &oflow);
 void setGDO0_hostpinMode(int8_t direction = INPUT);
 void setGDO2_hostpinMode(int8_t direction = INPUT);
+
+bool digitalReadGDO0(void);
+bool digitalReadGDO2(void);
+
 
 private:
 

@@ -338,7 +338,7 @@ void txSendByFifos(void)
 #if 0
 	radio.setModulation(DEFAULT_MODULATION); //4fsk
 	radio.setBaudRate(4.8);
-	radio.setDeviation_FSK2(1.8);
+	radio.setDeviation(1.8);
 	radio.setNumPreambleBytes (7);  // long preamble
 #else
 	radio.setMHZ(0); 				// refresh tx freq
@@ -530,7 +530,7 @@ static void exec(char *input)
     else if (strcmp_P(cmd, PSTR("setdeviation")) == 0)
     {
         nextParam = atof(cmd_args);
-        radio.setDeviation_FSK2(nextParam);
+        radio.setDeviation(nextParam);
         Serial.print(F("\r\nDeviation: "));
         Serial.print(nextParam);
         Serial.print(F(" KHz\r\n"));
@@ -976,7 +976,7 @@ static void exec(char *input)
     	}
     	else
     	{
-    		Serial.printf("cal2 requires a start freq\n");
+    		Serial.printf("cal-CW requires a start freq\n");
     	}
     }
 	else if (strcmp_P(cmd, PSTR("cal-pkt")) == 0)
@@ -1246,13 +1246,102 @@ static void exec(char *input)
         {
             Serial.print(F("Wrong parameters.\r\n"));
         }
-
-        ;
-
-
-        // handling PLAYRAW command
     }
+    else if (strcmp_P(cmd, PSTR("p25")) == 0)
+    {
+        radio.EnterIdleMode();
 
+        radio.setFreqHz(866888700);
+        radio.setPktFormat(0);
+        
+        radio.setGDOxPinConfig(CONFIG_IOCFG2, INPUT);
+
+        radio.setSyncWord(0xFF, 0x77);
+        radio.setSyncMode(2); //15 of 16 bits ok
+        
+        radio.setPacketLength(CC_FIFOSIZE);
+
+        //fixed packet length
+        //packet size NOT inside packet
+        //packet size set above in setPacketLength(blah);
+        radio.setLengthConfig(0);
+        
+
+        radio.setBaudRate(9600);
+        radio.setDeviation(3.6); // (1.8k L + 1.8k R) = 3.6k
+
+        radio.setModulation(3); //fsk-4
+        
+        radio.setGDO2_hostpinMode(INPUT);
+
+        radio.setGDOxPinConfig(CONFIG_IOCFG2, 0x6); // flag sync-eop
+		radio.enableChangingIRQ_GDO2(true);
+
+        radio.EnterRxMode();
+
+        while (!Serial.available())
+        {
+   			bool toilet;
+   			uint8_t rxCount;
+			bool ret = radio.wait4ChangingIRQ_GDO2();
+			if (ret == true)
+			{
+				bool bUP = radio.digitalReadGDO2();
+				Serial.printf("%c",  bUP? '+':'-');
+
+				if (bUP)
+				{
+					while(radio.digitalReadGDO2())
+					{
+						rxCount = radio.GetRxFifoCount(toilet);
+						
+						float fdev = radio.getCarrierDev();
+ 						if (rxCount)
+						{
+							uint8_t rxData = radio.SpiReadReg(CONFIG_FIFO);
+							Serial.printf("[%3d] %02X %c fdev=%7.2f\n", rxCount, rxData, rxData, fdev);
+						}
+						//if (toilet) break;
+			
+					}
+				}
+				else
+				{
+					while(true)
+					{
+						// drain it!!! 
+						rxCount = radio.GetRxFifoCount(toilet);
+ 						if (rxCount)
+						{
+							uint8_t rxData = radio.SpiReadReg(CONFIG_FIFO);
+							Serial.printf("\t[%3d] %02X %c\n", rxCount, rxData, rxData);
+						}
+						else
+						{
+							break;
+						}
+						if (toilet) radio.SpiStrobe(CC1101_SFRX);
+					}
+				
+				}
+			}
+			else
+			{
+				rxCount =radio.GetRxFifoCount(toilet);
+				Serial.printf("_%d_", rxCount);
+			}
+		}
+		Serial.read();
+
+		radio.EnterIdleMode();
+		radio.enableChangingIRQ_GDO2(false);
+
+        // setting normal pkt format again
+        radio.setCCMode(GDO0_isSYNC_TXEND);
+        radio.setPktFormat(0);
+        radio.EnterRxMode();
+
+    }
     else if (strcmp_P(cmd, PSTR("showraw")) == 0)
     {
         // show the content of recorded RAW signal as hex numbers
