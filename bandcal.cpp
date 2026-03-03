@@ -99,8 +99,8 @@ int32_t REMAP( int32_t freqHzIn, int32_t freqLeft, int32_t calLeft, int32_t freq
 
 	double y = calLeft - (slope * (double)(freqLeft - freqHzIn)) ; // + (double) calLeft;
 
-	Serial.printf("IN %d  LHS=[%d %d] RHS=[%d %d] OUT= %f\n",  
-			freqHzIn, freqLeft, calLeft, freqRight, calRight, y);
+	Serial.printf("%s: IN %d  LHS=[%d %d] RHS=[%d %d] OUT= %f\n",  
+			__FUNCTION__, freqHzIn, freqLeft, calLeft, freqRight, calRight, y);
 
 	return y;	
 }
@@ -111,7 +111,7 @@ void bandCalKnob(int32_t startFreq)
 	int32_t tweaker = 0;
 	uint8_t digitSel = 3;
 	bool bCalMode = true;	// normal val for doing band cal.
-	Serial.printf(FG_YELLOW "%s negative freq for test with compensation table\n");
+	Serial.printf(FG_YELLOW "use NEGATIVE freq for test with compensation table\n");
 	Serial.printf(" positive freq for disable compensation table\n");
 	Serial.printf(" val < 1000, freq in mhz\n");
 	Serial.printf(" val > 1000, freq in Hz\n");

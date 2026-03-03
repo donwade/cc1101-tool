@@ -1,1 +1,1 @@
-m5-esp --dns_name YELLOW
+m5-esp --verbose --dns_name YELLOW
