@@ -134,6 +134,7 @@ uint8_t * makeRandomTxBuffer(uint8_t len)
 	return TX_BUFFER;
 }
 
+
 void binToAscii(byte *asciiIn, char *hexOut, int len)
 {
 
@@ -1249,15 +1250,20 @@ static void exec(char *input)
     }
     else if (strcmp_P(cmd, PSTR("p25")) == 0)
     {
+    	#define SAVE_SIZE 70
+    	uint8_t p25buf[SAVE_SIZE];
+    	uint8_t p25Cnt = 0;
+    	
         radio.EnterIdleMode();
 
-        radio.setFreqHz(866888700);
+        radio.setFreqHz(866887500);
         radio.setPktFormat(0);
         
         radio.setGDOxPinConfig(CONFIG_IOCFG2, INPUT);
 
-        radio.setSyncWord(0xFF, 0x77);
-        radio.setSyncMode(2); //15 of 16 bits ok
+        radio.setSyncWord(0x75, 0x5F);
+        radio.setSyncMode(1); //1// of 16 bits ok
+        // sigh radio.setPQT(3);
         
         radio.setPacketLength(CC_FIFOSIZE);
 
@@ -1281,26 +1287,41 @@ static void exec(char *input)
 
         while (!Serial.available())
         {
+        	
+        	yield();
    			bool toilet;
    			uint8_t rxCount;
 			bool ret = radio.wait4ChangingIRQ_GDO2();
+			
 			if (ret == true)
 			{
 				bool bUP = radio.digitalReadGDO2();
-				Serial.printf("%c",  bUP? '+':'-');
+				//Serial.printf("%c",  bUP? '+':'-');
 
 				if (bUP)
 				{
+					p25Cnt = 0;
+					memset(p25buf, 0x55, SAVE_SIZE);
+					
 					while(radio.digitalReadGDO2())
 					{
 						rxCount = radio.GetRxFifoCount(toilet);
-						
+						if (!rxCount) continue;
+
 						float fdev = radio.getCarrierDev();
- 						if (rxCount)
-						{
-							uint8_t rxData = radio.SpiReadReg(CONFIG_FIFO);
-							Serial.printf("[%3d] %02X %c fdev=%7.2f\n", rxCount, rxData, rxData, fdev);
-						}
+
+						//if (rxCount == 1) delayMicroseconds(1000000. * 8./9600);
+ 						
+						// read as fast as possible
+						uint8_t rxData = radio.SpiReadReg(CONFIG_FIFO);
+
+						if (p25Cnt == SAVE_SIZE) break;
+						
+						p25buf[p25Cnt++] = rxData;
+						//Serial.printf("[%3d] %02X %c fdev=%7.2f\n", rxCount, rxData, rxData, fdev);
+						
+						assert(p25Cnt < SAVE_SIZE);
+						
 						//if (toilet) break;
 			
 					}
@@ -1311,22 +1332,29 @@ static void exec(char *input)
 					{
 						// drain it!!! 
 						rxCount = radio.GetRxFifoCount(toilet);
- 						if (rxCount)
-						{
-							uint8_t rxData = radio.SpiReadReg(CONFIG_FIFO);
-							Serial.printf("\t[%3d] %02X %c\n", rxCount, rxData, rxData);
-						}
-						else
-						{
-							break;
-						}
-						if (toilet) radio.SpiStrobe(CC1101_SFRX);
+						if (!rxCount) break;
+						if (rxCount == 1) delayMicroseconds(1000000. * 8./9600);
+						
+						uint8_t rxData = radio.SpiReadReg(CONFIG_FIFO);
+						
+						if (p25Cnt == SAVE_SIZE) break;
+						p25buf[p25Cnt++] = rxData;
+						
+						//Serial.printf("\t[%3d] %02X %c\n", rxCount, rxData, rxData);
+						assert(p25Cnt < SAVE_SIZE);
+						
+						
 					}
+					
+					if (toilet) radio.SpiStrobe(CC1101_SFRX);
+					dumpBinary(p25buf,p25Cnt);
 				
 				}
+				
 			}
 			else
 			{
+				// timeout
 				rxCount =radio.GetRxFifoCount(toilet);
 				Serial.printf("_%d_", rxCount);
 			}

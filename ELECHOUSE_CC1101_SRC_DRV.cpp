@@ -2812,10 +2812,12 @@ int ELECHOUSE_CC1101::getPktStatus(void)
 	static int16_t last = -1;
 	static uint32_t lastTime;
 
+/*
 	uint32_t now = millis();
 	uint32_t delta = now - lastTime;
 	lastTime = now;
-	
+*/
+
 	uint8_t orig= SpiReadStatus(STATUS_PKTSTATUS);
 	
 	bCarrierSense 	= regMaskRead <uint8_t> ( orig, 6, 6);
@@ -2825,20 +2827,21 @@ int ELECHOUSE_CC1101::getPktStatus(void)
 	bGDO2 			= regMaskRead <uint8_t> ( orig, 2, 2);
 	bGDO0 			= regMaskRead <uint8_t> ( orig, 0, 0);
 
+
 	if (last != orig)
 	{
 		last = orig;
-		Serial.printf("T=%5d CSense=%d PQual=%d ClearChan=%d SyncOrPktDone=%d RSSI=%3d\n", 
-				delta, bCarrierSense, bPQTpass, bCCA, bSyncNpacket, getRssi());
+		Serial.printf("%10.6f CSense=%d PQual=%d ClearChan=%d SyncOrPktDone=%d RSSI=%3d\n", 
+				getMHZ(), bCarrierSense, bPQTpass, bCCA, bSyncNpacket, getRssi());
 	}
 
 	static int lastRssi;
 	int rssi = getRssi();
-	if (rssi > lastRssi )
+	if ( abs ( rssi - lastRssi) > 5 )
 	{
-		lastRssi = rssi + 10;
-		Serial.printf("T=%5d CSense=%d PQual=%d ClearChan=%d SyncOrPktDone=%d RSSI=%3d\n", 
-				delta, bCarrierSense, bPQTpass, bCCA, bSyncNpacket, rssi);
+		lastRssi = rssi;
+		Serial.printf("%10.6f CSense=%d PQual=%d ClearChan=%d SyncOrPktDone=%d RSSI=%3d\n", 
+				getMHZ(), bCarrierSense, bPQTpass, bCCA, bSyncNpacket, getRssi());
 	}
 
     return orig;

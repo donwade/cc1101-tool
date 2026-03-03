@@ -3,6 +3,36 @@
 
 //#define LINE Serial.printf("%s:%d ---- \n", __FUNCTION__, __LINE__);
 
+void dumpBinary(uint8_t *input, uint16_t len, uint8_t width)
+{
+	int numLines = (len + width/2)/ width; // round up.
+
+	for (int down = 0; down < numLines; down++)
+	{
+		int index;
+		
+		Serial.printf("[%04X] : ", down * numLines);
+		for (int across = 0; across < width; across++)
+		{
+			index = down * numLines + across;
+			if (index > len) break;
+			Serial.printf("%02X ", input[ index]);
+		}
+		Serial.printf("    ");
+
+		for (int across = 0; across < width; across++)
+		{
+			index = down * numLines + across;
+			if (index > len) break;
+			char c = input[ index];
+			Serial.printf("%c", ( c < 0x20 || c > 0x7F) ? '.' : c);
+		}
+		Serial.println();
+	}
+	Serial.println();
+	
+}
+
 KEYS getKey(bool bBlocking)
 {
 	static uint8_t keystroke;
