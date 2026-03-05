@@ -182,6 +182,18 @@ template <typename T> T regMaskWrite( T &final, T newField, uint8_t lhs, uint8_t
 		mask |=1;
 	}
 
+	// ensure value is not larger than the mask, that's an error.
+	if (newField & (~mask))
+	{
+		Serial.printf( "input  = "); binary(newField);
+		Serial.printf("\nmask  = "); binary(~mask);
+		Serial.printf("\nerror = "); binary(newField & ~mask);
+		Serial.println();
+		delay(1000);
+		assert(!(newField & (~mask)));
+	}
+	
+	
 	// must have, some reg fields are signed values, dont smash other fields.
 	newField &= mask; 
 	
@@ -314,10 +326,10 @@ void ELECHOUSE_CC1101::_setField(const char *regName, uint8_t regNum, uint8_t va
 }	
 //---------------------------------------------------------------------
 
-void binary (unsigned char byte) {
+void binary (unsigned char num) {
     for (int i = 7; i >= 0; i--) {
         // Use bitwise AND (&) and right shift (>>) to check each bit
-        Serial.printf("%d", (byte >> i) & 1);
+        Serial.printf("%d",  !! ( num & (1<<i)));
     }
     
 }
@@ -1957,6 +1969,7 @@ void ELECHOUSE_CC1101::setCarrierSenseAbs(int8_t vDb)
 		vDb = -8;
 		Serial.printf(FG_MAGENTA "%s NOW is DISABLED (db < -7 || db > +7) \n" FG_DONE, __FUNCTION__);
 	}	
+	vDb &= 0xF; // its a signed thing
 	setField(CONFIG_AGCCTRL1, vDb, 3, 0);
 }
 
@@ -2001,6 +2014,94 @@ void ELECHOUSE_CC1101::setCarrierSenseRel(int8_t vDb)
 
 	setField(CONFIG_AGCCTRL1, reg , 5, 4);
 }
+
+
+
+void ELECHOUSE_CC1101::setMaxDvgaGain(uint8_t pick)
+{
+	char *msg;
+
+	switch(pick)
+	{
+		case 0:
+			msg = "(00)All gain settings can be used";
+		break;
+		
+		case 1:
+			msg = "(01)The highest gain setting can not be used";
+		break;
+		
+		case 2:
+			msg = "(10)The 2nd highest gain settings can not be used";
+		break;
+		
+		case 3:
+			msg = "(11)The 3rd highest gain settings can not be used";
+		break;
+	
+		default:
+			assert(pick != pick);
+		break;
+		
+	}
+	
+	Serial.printf(FG_MAGENTA "\n%s %s\n" FG_DONE, __FUNCTION__, msg);
+	
+	setField(CONFIG_AGCCTRL2, pick, 7, 6);
+	
+}
+
+void ELECHOUSE_CC1101::setMaxLnaGain(uint8_t pick)
+{
+
+	char *msg;
+
+	switch(pick)
+	{
+		case 0:
+			msg = "(000)Maximum possible LNA + LNA 2 gain";
+		break;
+		
+		case 1:
+			msg = "(001)Approx. 2.6 dB below maximum possible gain";
+		break;
+		
+		case 2:
+			msg = "(010)Approx. 6.1 dB below maximum possible gain";
+		break;
+
+		case 3:
+			msg = "(011)Approx. 7.4 dB below maximum possible gain";
+		break;
+
+		case 4:
+			msg = "(100)Approx. 9.2 dB below maximum possible gain";
+		break;
+
+		case 5:
+			msg = "(101)Approx. 11.5 dB below maximum possible gain";
+		break;
+
+		case 6:
+			msg = "(110)Approx. 14.6 dB below maximum possible gain";
+		break;
+
+		case 7:
+			msg = "(111)Approx. 17.1 dB below maximum possible gain";
+		break;
+
+		default:
+			assert(pick != pick);
+		break;
+		
+	}
+	
+	Serial.printf(FG_MAGENTA "\n%s %s\n" FG_DONE, __FUNCTION__, msg);
+	
+	setField(CONFIG_AGCCTRL2, pick , 5, 3);
+	
+}
+
 
 uint8_t ELECHOUSE_CC1101::setMAGNTarget(uint8_t vDb)
 {
@@ -2226,16 +2327,6 @@ void ELECHOUSE_CC1101::setManchester(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setSyncMode(byte v)
 {
-#if OEM_CODE
-    Split_MDMCFG2();
-    m2SYNCM = 0;
-
-    if (v > 7)
-        v = 7;
-
-    m2SYNCM = v;
-    SpiWriteReg(CONFIG_MDMCFG2, m2DCOFF + m2MODFM + m2MANCH + m2SYNCM);
-#else
    if (v > 7) v = 7;
 
    static const char *msg[] =
@@ -2252,7 +2343,6 @@ void ELECHOUSE_CC1101::setSyncMode(byte v)
    
    Serial.printf(FG_MAGENTA "\n%s mode = %s\n" FG_DONE, __FUNCTION__, msg[v]);
    setField(CONFIG_MDMCFG2, v , 2, 0);
-#endif
 }
 
 
@@ -2264,21 +2354,22 @@ void ELECHOUSE_CC1101::setSyncMode(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setFEC(bool v)
 {
-#if OEM_CODE
-    Split_MDMCFG1();
-    m1FEC = 0;
-
-    if (v == 1)
-        m1FEC = 128;
-
-    SpiWriteReg(CONFIG_MDMCFG1, m1FEC + m1PRE + m1CHSP);
-#else
 	Serial.printf(FG_MAGENTA "\n%s: %s\n" FG_DONE, __FUNCTION__, v ? "ON":"OFF");
-	
 	setField(CONFIG_MDMCFG1, v,7,7);
-#endif
 }
 
+void ELECHOUSE_CC1101::setRxIF(uint32_t offsetHz)
+{
+	float step = (XTAL_Hz/(1 << 10));
+	assert (offsetHz < step * 16);
+	uint8_t reg = (float) offsetHz / step;
+
+	Serial.printf("default reg=6 -> f= %f\n", 6.0 * step);
+	
+	Serial.printf(FG_MAGENTA "\n%s: rx IF = %d  (reg = %d) oneStep=%9.2f\n" FG_DONE, 
+		__FUNCTION__, offsetHz, reg, step);
+	setField(CONFIG_FSCTRL1, reg, 4,0);
+}
 
 /****************************************************************
 * FUNCTION NAME:Set PRE
@@ -2330,6 +2421,121 @@ void ELECHOUSE_CC1101::setLogicalChanNum(byte ch)
     SpiWriteReg(CONFIG_CHANNR, logical_chan);
 }
 
+void ELECHOUSE_CC1101::setAGCLength(int8_t v)
+{
+	/* 2-FSK, 4-FSK, MSK: Sets the averaging length for the amplitude from
+			the channel filter.
+	   ASK, OOK: Sets the OOK/ASK decision boundary for OOK/ASK
+			reception.
+
+	   v = 8, 16, 32, 64
+	*/
+	int8_t reg;
+	for (reg = 3; reg < -1; reg++)
+	{
+		if ((8 << reg) >= v) break; 
+	}
+	assert(reg == -1);
+
+	setField(CONFIG_AGCCTRL0, reg, 1, 0);
+		
+}
+
+
+void ELECHOUSE_CC1101::setAGCWaitTime(int8_t v)
+{
+	/*
+	   Sets the number of channel filter samples from a gain adjustment has
+	   been made until the AGC algorithm starts accumulating new samples.
+
+	   v = 8, 16, 32, 64
+	*/
+	int8_t reg;
+	switch (v)
+	{
+		case 8:
+			reg = 0;
+		break;
+		
+		case 16:
+			reg = 1;
+		break;
+		
+		case 24:
+			reg = 2;
+		break;
+		
+		case 32:
+			reg = 3;
+		break;
+
+		default:
+			assert(v != v); 
+		break;
+	}
+
+	setField(CONFIG_AGCCTRL0, reg, 5, 4);
+		
+}
+
+void ELECHOUSE_CC1101::setAGCFreezeAlgo(int8_t v)
+{
+	assert(v < 4);
+	char *msg;
+	
+	switch (v)
+	{
+		case 0:
+			msg="Normal operation. Always adjust gain when required.";
+		break;
+		
+		case 1:
+			msg="The gain setting is frozen when a sync word has been found.";
+		break;
+		
+		case 2:
+			msg="Manually freeze the analogue gain setting and the digital gain.";
+		break;
+		
+		case 3:
+			msg="Manually freezes both the analogue and the digital";
+		break;
+
+	}
+
+	Serial.printf(FG_MAGENTA "%s: algo = %s\n" FG_DONE, __FUNCTION__, msg);
+	setField(CONFIG_AGCCTRL0, v, 3, 2);
+	
+}
+
+void ELECHOUSE_CC1101::setAGCHysteresis(int8_t v)
+{
+	assert(v < 4);
+	char *msg;
+
+	switch (v)
+	{
+		case 0:
+			msg="No hysteresis, small symmetric dead zone, high gain";
+		break;
+		
+		case 1:
+			msg="Low hysteresis, small asymmetric dead zone, medium gain";
+		break;
+		
+		case 2:
+			msg="Medium hysteresis, medium asymmetric dead zone, medium gain";
+		break;
+		
+		case 3:
+			msg="Large hysteresis, large asymmetric dead zone, low	gain";
+		break;
+	}
+	
+	Serial.printf(FG_MAGENTA "%s: hysteresis = %s\n" FG_DONE, __FUNCTION__, msg);
+	setField(CONFIG_AGCCTRL0, v, 7, 6);
+
+}
 
 /****************************************************************
 * FUNCTION NAME:Set Channel spacing
@@ -2422,74 +2628,38 @@ void ELECHOUSE_CC1101::setChannelSpacing(float channelSpaceF)
 ****************************************************************/
 void ELECHOUSE_CC1101::setRxBW(float rxBw)
 {
-#if OEM_CODE
-    Split_MDMCFG4();
-    int s1 = 3;
-    int s2 = 3;
-
-    for (int i = 0; i < 3; i++)
-    {
-        if (rxBw > 101.5625)
-        {
-            rxBw /= 2; s1--;
-        }
-        else
-        {
-            i = 3;
-        }
-    }
-
-    for (int i = 0; i < 3; i++)
-    {
-        if (rxBw > 58.1)
-        {
-            rxBw /= 1.25; s2--;
-        }
-        else
-        {
-            i = 3;
-        }
-    }
-
-    s1 *= 64;
-    s2 *= 16;
-    m4RxBw = s1 + s2;
-    SpiWriteReg(16, m4RxBw + m4DaRa);
-#else
-	int16_t exp;
-	float mantissa;
-	int32_t iMant;
-
-	int16_t lockExp = -1;
-	int16_t lockMantissa = -1;
-
 	Serial.printf(FG_MAGENTA "\n%s: setting rx bw = %5.2f khz\n" FG_DONE, __FUNCTION__, rxBw);
 
 	rxBw *= 1000.;
-	float FIXED = (XTAL_Mhz * 1.e6) / (rxBw * 8.);
-
-	for (exp = 0; exp < 4; exp++)
+	uint8_t mant;
+	uint8_t bestExp, bestMant;
+	uint32_t bestDiff = 0xFFFFFFFF;
+	
+	for (int exp = 0; exp < 4; exp++)
 	{
-		float expTest = (float)(1 << exp);
-		float mantissa = ((FIXED - 4 * expTest)) /expTest;
-		iMant = mantissa;
-		Serial.printf("\t\texp=%d  mant=%d\n", exp, (int)mantissa);
-
-		if (iMant < 0) continue;	// negative is bad for pll
-		if (iMant > 3) continue;	// can't fit in a 2bit register
-
-		if (lockExp < 0)
+		for (mant = 0; mant < 4; mant++)
 		{
-			lockExp = exp;
-			lockMantissa = iMant;
+			float bw = XTAL_Hz/(8. *(4.0 + (float)mant)*(float)(1<< exp));
+			Serial.printf("mant=%d exp=%d bw=%d\n", mant, exp, (int)bw);
+
+			uint32_t diff = abs(bw - rxBw);
+			Serial.printf("diff = %d\n", diff);
+			
+			if (diff < bestDiff)
+			{
+				bestDiff = diff;
+				bestExp = exp;
+				bestMant = mant;
+			}
 		}
 	}
+	Serial.printf("\tlock Mant=%d Exp=%d error=%d\n", bestMant, bestExp, bestDiff);
 
-	Serial.printf("\tlock Mant=%d Exp=%d\n", lockMantissa, lockExp);
+	setField(CONFIG_MDMCFG4, bestExp, 7, 6);
 
-	setField(CONFIG_MDMCFG4, lockExp, 7, 6);
-	setField(CONFIG_MDMCFG4, lockMantissa, 5, 4);
-#endif
+	setField(CONFIG_MDMCFG4, 9999, 5, 4);
+	
+	setField(CONFIG_MDMCFG4, bestMant, 5, 4);
 }
 
 

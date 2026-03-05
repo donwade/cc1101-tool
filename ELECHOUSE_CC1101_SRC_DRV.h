@@ -64,7 +64,7 @@ typedef enum CONFIG_REG
     CONFIG_CHANNR   , //0x0A Channel number
 
     CONFIG_FSCTRL1  , //0x0B Frequency synthesizer control
-    CONFIG_FSCTRL0  , //0x0C Frequency synthesizer control
+    CONFIG_FSCTRL0  , //0x0C pll offset tweak 
 
     CONFIG_FREQ2    , //0x0D Frequency control word, high INT8U
     CONFIG_FREQ1    , //0x0E Frequency control word, middle INT8U
@@ -209,7 +209,11 @@ void setPA(int p);
 void setLnaStrategy(bool bType1);
 void setCarrierSenseAbs(int8_t vDb);
 void setCarrierSenseRel(int8_t vDb);
+
 uint8_t setMAGNTarget(uint8_t vDb);
+void setMaxLnaGain(uint8_t pick);
+void setMaxDvgaGain(uint8_t pick);
+
 void setCCAmode(uint8_t type);
 void setRxOffMode(uint8_t type);
 void setTxOffMode(uint8_t type);
@@ -249,6 +253,12 @@ void EnterRxMode(float mhz);
 int getRssi(void);
 float getCarrierDev(void);
 
+void setAGCLength(int8_t v);
+void setAGCWaitTime(int8_t v);
+void setAGCFreezeAlgo(int8_t v);    
+void setAGCHysteresis(int8_t v);
+
+
 byte getLqi(void);
 byte getState(bool bSilent = true);
 
@@ -285,6 +295,8 @@ void setDcFilterOff(bool v);
 void setManchester(bool v);
 void setSyncMode(byte v);
 void setFEC(bool v);
+void setRxIF(uint32_t Hz);
+
 void setNumPreambleBytes(byte v);
 void setPQT(byte v);
 void setCRC_AF(bool v);

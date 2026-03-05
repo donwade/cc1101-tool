@@ -33,6 +33,7 @@
 #include "esp_intr_types.h"
 #include "keyboard.h"
 #include "bandcal.h"
+#include "layer1.h"
 
 const char *ssid = MY_SSID;
 const char *password = MY_SSID_PASSWORD;
@@ -1248,8 +1249,12 @@ static void exec(char *input)
             Serial.print(F("Wrong parameters.\r\n"));
         }
     }
-    else if (strcmp_P(cmd, PSTR("p25")) == 0)
+    else if (strcmp_P(cmd, PSTR("x25")) == 0)
     {
+    	layer1();
+    }
+	else if (strcmp_P(cmd, PSTR("p25")) == 0)
+	{
     	#define SAVE_SIZE 70
     	uint8_t p25buf[SAVE_SIZE];
     	uint8_t p25Cnt = 0;
