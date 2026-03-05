@@ -188,7 +188,7 @@ template <typename T> T regMaskWrite( T &final, T newField, uint8_t lhs, uint8_t
 		Serial.printf( "input  = "); binary(newField);
 		Serial.printf("\nmask  = "); binary(~mask);
 		Serial.printf("\nerror = "); binary(newField & ~mask);
-		Serial.println();
+		Serial.println(); 
 		delay(1000);
 		assert(!(newField & (~mask)));
 	}
@@ -2640,10 +2640,11 @@ void ELECHOUSE_CC1101::setRxBW(float rxBw)
 		for (mant = 0; mant < 4; mant++)
 		{
 			float bw = XTAL_Hz/(8. *(4.0 + (float)mant)*(float)(1<< exp));
-			Serial.printf("mant=%d exp=%d bw=%d\n", mant, exp, (int)bw);
 
 			uint32_t diff = abs(bw - rxBw);
-			Serial.printf("diff = %d\n", diff);
+
+			//Serial.printf("mant=%d exp=%d bw=%d\n", mant, exp, (int)bw);
+			//Serial.printf("diff = %d\n", diff);
 			
 			if (diff < bestDiff)
 			{
@@ -2653,12 +2654,10 @@ void ELECHOUSE_CC1101::setRxBW(float rxBw)
 			}
 		}
 	}
-	Serial.printf("\tlock Mant=%d Exp=%d error=%d\n", bestMant, bestExp, bestDiff);
+	Serial.printf("%s: tgt=%d lock Mant=%d Exp=%d error=%d\n", 
+		__FUNCTION__, (int) rxBw, bestMant, bestExp, bestDiff);
 
 	setField(CONFIG_MDMCFG4, bestExp, 7, 6);
-
-	setField(CONFIG_MDMCFG4, 9999, 5, 4);
-	
 	setField(CONFIG_MDMCFG4, bestMant, 5, 4);
 }
 
