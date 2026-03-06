@@ -21,6 +21,7 @@
 #include "bandcal.h"
 
 extern ArduinoOTAClass ArduinoOTA;
+uint8_t gStatus;
 
 
 #define LINE Serial.printf(">>> %s:%d %s\n", __FILE__, __LINE__, __FUNCTION__)
@@ -596,7 +597,8 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , CONFIG_REG addr, byte valu
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
 
-    MY_SPI.transfer(addr);
+    gStatus = MY_SPI.transfer(addr);
+    
     MY_SPI.transfer(value);
     digitalWrite(SS_PIN, HIGH);
     SpiEnd();
@@ -620,7 +622,7 @@ void ELECHOUSE_CC1101::SpiWriteBurstReg(CONFIG_REG addr, byte *buffer, byte num)
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
     
-    MY_SPI.transfer(temp);
+    gStatus = MY_SPI.transfer(temp);
 
     for (i = 0; i < num; i++)
         MY_SPI.transfer(buffer[i]);
@@ -719,7 +721,8 @@ byte ELECHOUSE_CC1101::SpiReadReg(CONFIG_REG addr)
     temp = (byte) addr | READ_SINGLE;
     digitalWrite(SS_PIN, LOW);
 
-    MY_SPI.transfer(temp);
+    gStatus = MY_SPI.transfer(temp);
+    
     value = MY_SPI.transfer(0);
     digitalWrite(SS_PIN, HIGH);
 
@@ -743,7 +746,7 @@ void ELECHOUSE_CC1101::SpiReadBurstReg(CONFIG_REG addr, byte *buffer, byte num)
     digitalWrite(SS_PIN, LOW);
     digitalWrite(SS_PIN, LOW);
 
-    MY_SPI.transfer(temp);
+    gStatus = MY_SPI.transfer(temp);
 
     for (i = 0; i < num; i++)
         buffer[i] = MY_SPI.transfer(0);
@@ -769,7 +772,7 @@ byte ELECHOUSE_CC1101::SpiReadStatus(STATUS_REG addr)
     temp = (byte) addr | READ_BURST;
     digitalWrite(SS_PIN, LOW);
 
-    MY_SPI.transfer(temp);
+    gStatus = MY_SPI.transfer(temp);
     value = MY_SPI.transfer(0);
 
     digitalWrite(SS_PIN, HIGH);
@@ -881,7 +884,7 @@ void ELECHOUSE_CC1101::enableFallingIRQ_GDO0(bool bEnable)
 /****************************************************************
 * FUNCTION NAME:GDO0 IRQ changing callback
 ****************************************************************/
-void ELECHOUSE_CC1101::enableChangingIRQ_GDO0(bool bEnable)
+void ELECHOUSE_CC1101::enableChangingIRQ_GDO0(bool bEnable, void (*pfnCustomCb)(void))
 {
 	Serial.printf(FG_FYELLOW);
 	
@@ -897,7 +900,7 @@ void ELECHOUSE_CC1101::enableChangingIRQ_GDO0(bool bEnable)
 
 	    irqChgCtrGDO0 = 0;
 
-	   	attachInterrupt(GDO0, onGDO0_IRQ, CHANGE);
+	   	attachInterrupt(GDO0, pfnCustomCb ? pfnCustomCb : onGDO0_IRQ, CHANGE);
 	   	irqDirGDO0 = CHANGE;
 		Serial.printf("%s CHANGE mode\n", __FUNCTION__);
 	   	
@@ -1081,7 +1084,7 @@ void ELECHOUSE_CC1101::enableRisingIRQ_GDO2(bool bEnable)
 /****************************************************************
 * FUNCTION NAME:GDO2 IRQ changing callback
 ****************************************************************/
-void ELECHOUSE_CC1101::enableChangingIRQ_GDO2(bool bEnable)
+void ELECHOUSE_CC1101::enableChangingIRQ_GDO2(bool bEnable, void (*pfnCustomCb)(void))
 {
 	Serial.printf(FG_FYELLOW);
 	
@@ -1097,7 +1100,7 @@ void ELECHOUSE_CC1101::enableChangingIRQ_GDO2(bool bEnable)
 
 	    irqChgCtrGDO2 = 0;
 
-	   	attachInterrupt(GDO2, onGDO2_IRQ, CHANGE);
+	   	attachInterrupt(GDO2, pfnCustomCb? pfnCustomCb : onGDO2_IRQ, CHANGE);
 	   	irqDirGDO2 = CHANGE;
 		Serial.printf("%s CHANGE mode\n", __FUNCTION__);
 	   	
@@ -2431,12 +2434,28 @@ void ELECHOUSE_CC1101::setAGCLength(int8_t v)
 	   v = 8, 16, 32, 64
 	*/
 	int8_t reg;
-	for (reg = 3; reg < -1; reg++)
+	switch(v)
 	{
-		if ((8 << reg) >= v) break; 
-	}
-	assert(reg == -1);
+		case 8:
+			reg = 0;
+		break;
 
+		case 16:
+			reg = 1;
+		break;
+		
+		case 32:
+			reg = 2;
+		break;
+		
+		case 64:
+			reg = 3;
+		break;
+
+		default:
+			assert(reg != reg);
+		break;
+	}		
 	setField(CONFIG_AGCCTRL0, reg, 1, 0);
 		
 }

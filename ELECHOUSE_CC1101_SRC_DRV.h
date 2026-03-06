@@ -227,11 +227,12 @@ void setGDOxPinConfig(uint8_t reg, uint8_t value, bool bSilent=false);
 
 void enableRisingIRQ_GDO0(bool bEnable);
 void enableFallingIRQ_GDO0(bool bEnable);
-void enableChangingIRQ_GDO0(bool bEnable);
 
 void enableRisingIRQ_GDO2(bool bEnable);
 void enableFallingIRQ_GDO2(bool bEnable);
-void enableChangingIRQ_GDO2(bool bEnable);
+
+void enableChangingIRQ_GDO0(bool bEnable, void (*pfnCustomCb)(void) = NULL);
+void enableChangingIRQ_GDO2(bool bEnable, void (*pfnCustomCb)(void) = NULL);
 
 bool wait4RisingIRQ_GDO0(void);
 bool wait4FallingIRQ_GDO0(void);
@@ -318,6 +319,7 @@ private:
  };
 
 extern void binToAscii(byte *asciiIn, char *hexOut, int len);
+extern uint8_t gStatus;
 
 
 extern uint32_t irqUpCtrGDO0;
