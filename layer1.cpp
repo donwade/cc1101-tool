@@ -33,7 +33,8 @@ uint32_t  history[HISTORY_WIDE];
 uint32_t farLeft, farRight;
 
 #define BIG_SHIFT 2
-volatile uint64_t bigShifter[BIG_SHIFT], keptMatch[BIG_SHIFT];
+
+uint64_t bigShifter[BIG_SHIFT], keptMatch[BIG_SHIFT];
 uint32_t preambleCtr = 0;
 
 const uint32_t BAUD_4800uS = 1000000/4800;
@@ -122,7 +123,8 @@ void show(void)
 // 0x5F repetitions over 15 bytes (125/8)
 
 #define M_WIDE 48 
-#define M_MATCH (0xF5FF7FFF00000000 ) //<< (64 - M_WIDE))
+//#define M_MATCH (0xF5FF7FFF00000000 ) //<< (64 - M_WIDE))
+#define M_MATCH (0x5555555500000000 ) //<< (64 - M_WIDE))
 #define M_MASK  (0xFFFFFFFF00000000 ) // << (64 - M_WIDE))
 
 void findPreamble(void)
@@ -132,7 +134,7 @@ void findPreamble(void)
 	if ((lshifter & M_MASK) == M_MATCH)
 	{	
 		preambleCtr++;
-		*keptMatch = *bigShifter;
+		memcpy(keptMatch, bigShifter, sizeof(keptMatch));
 	}
 }
 

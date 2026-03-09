@@ -19,6 +19,7 @@
 #include "pretty.h"
 #include <ArduinoOTA.h>
 #include "bandcal.h"
+#include "TI_SmartReg.h"
 
 extern ArduinoOTAClass ArduinoOTA;
 uint8_t gStatus;
@@ -571,7 +572,8 @@ void ELECHOUSE_CC1101::Init(void)
     Reset();                  //CC1101 reset
 
     RegConfigSettings();          //CC1101 register config
-
+	setupTi();
+	
     SpiEnd();
 }
 
