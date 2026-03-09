@@ -83,8 +83,8 @@ byte SCK_PIN;
 byte MISO_PIN;
 byte MOSI_PIN;
 byte SS_PIN;
-byte GDO0;
-byte GDO2;
+uint8_t GDO0;
+uint8_t GDO2;
 bool spi = 0;
 eGDIO_MODES ccmode = NOT_INITED;
 eMODEM_STATE trxstate = MODEM_IDLE;
@@ -2526,6 +2526,55 @@ void ELECHOUSE_CC1101::setAGCFreezeAlgo(int8_t v)
 	setField(CONFIG_AGCCTRL0, v, 3, 2);
 	
 }
+
+
+void ELECHOUSE_CC1101::setFOCgate(int8_t v)
+{
+	setField(CONFIG_FOCCFG, v, 5,5);
+}
+
+void ELECHOUSE_CC1101::setFOCpre(int8_t v)
+{
+	setField(CONFIG_FOCCFG, v, 4,3);
+}
+
+void ELECHOUSE_CC1101::setFOCpost(int8_t v)
+{
+	setField(CONFIG_FOCCFG, v, 2, 2);
+}
+
+void ELECHOUSE_CC1101::setFOClimit(int8_t v)
+{
+	char *msg;
+	switch(v)
+	{
+		case 0:
+			msg ="(00)±0 AFC disabled (no frequency offset compensation)";
+		break;
+
+		case 1:
+			msg ="(01)±BWCHAN/8";
+		break;
+		
+		case 2:
+			msg ="(10)±BWCHAN/4";
+		break;
+		
+		case 3:
+			msg ="(11)±BWCHAN/2 ";
+		break;
+
+		default:
+			assert(v != v);
+		break;
+	}
+	
+	Serial.printf(FG_FMAGENTA "%s: AFC limit = %s\n" FG_DONE, __FUNCTION__, msg);
+	delay(2000);
+	
+	setField(CONFIG_FOCCFG, v, 1, 0);
+}
+
 
 void ELECHOUSE_CC1101::setAGCHysteresis(int8_t v)
 {

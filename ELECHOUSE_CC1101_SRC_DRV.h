@@ -259,6 +259,13 @@ void setAGCWaitTime(int8_t v);
 void setAGCFreezeAlgo(int8_t v);    
 void setAGCHysteresis(int8_t v);
 
+void setFOCgate(int8_t v);
+void setFOCpre(int8_t v);
+void setFOCpost(int8_t v);
+void setFOClimit(int8_t v);
+
+
+
 
 byte getLqi(void);
 byte getState(bool bSilent = true);
@@ -334,6 +341,8 @@ extern SemaphoreHandle_t sem_GDO0_DN ;
 extern SemaphoreHandle_t sem_GDO2_UP ;
 extern SemaphoreHandle_t sem_GDO2_DN ;
 
+extern uint8_t GDO0;
+extern uint8_t GDO2;
 
 extern ELECHOUSE_CC1101 radio;
 #define DEFAULT_BAUD 300

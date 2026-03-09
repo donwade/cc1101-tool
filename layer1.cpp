@@ -13,27 +13,53 @@
 #include <ArduinoOTA.h>
 #include "esp_intr_types.h"
 #include "ELECHOUSE_CC1101_SRC_DRV.h"
+#include "pretty.h"
 
 #include "keyboard.h"
 #include "bandcal.h"
 
-uint32_t irqCnt0;
-uint32_t irqCnt2;
+/*
+time uS	    90 	    97	   104	   111	   118	   125	   132	  
+baud	 11111	 10309	  9615	  9009	  8474	  8000	  7575
+count		 4		17		10		11		 0		 0		 0 
+*/
+
+uint32_t irqGDO0ctr;
+uint32_t irqGDO2ctr;
 
 //-----------------------------------------------
 #define HISTORY_WIDE 9
 uint32_t  history[HISTORY_WIDE];
 uint32_t farLeft, farRight;
 
+#define BIG_SHIFT 2
+volatile uint64_t bigShifter[BIG_SHIFT], keptMatch[BIG_SHIFT];
+uint32_t preambleCtr = 0;
+
+const uint32_t BAUD_4800uS = 1000000/4800;
+const uint32_t BAUD_9600uS = 1000000/9600;
+
+#if 0	// 1=go by baud rate 0=go by direct uS
+
 #define BAUD_LEFT 12000
 #define BAUD_RIGHT 3500
 
 const int timeLeftBin  = 1000000./BAUD_LEFT;
 const int timeRightBin = 1000000./BAUD_RIGHT;
+#else
+#define US_MIDDLE BAUD_4800uS
+#define US_WIDE  20
+#define US_LEFT  (US_MIDDLE - US_WIDE)
+#define US_RIGHT (US_MIDDLE + US_WIDE)
+
+const int timeLeftBin  = US_LEFT;
+const int timeRightBin = US_RIGHT;
+#endif
+
 const int BIN_STEP_SIZE = (timeRightBin - timeLeftBin)/ HISTORY_WIDE;
 
 
-void capture(uint32_t tick)
+void statsCapture(uint32_t tick)
 {
 	int index;
 	
@@ -87,50 +113,183 @@ void show(void)
 			farLeft,
 			1000000/(timeLeftBin + (HISTORY_WIDE) * BIN_STEP_SIZE),
 			farRight);
- 	
+			
+			Serial.printf(FG_YELLOW "preambleCtr: %d\n" FG_DONE, preambleCtr);
 }
 
+//------------------------------------------
+// 01 01 11 11 x 125 repetitions by bits.
+// 0x5F repetitions over 15 bytes (125/8)
 
-//-----------------------------------------------
+#define M_WIDE 48 
+#define M_MATCH (0xF5FF7FFF00000000 ) //<< (64 - M_WIDE))
+#define M_MASK  (0xFFFFFFFF00000000 ) // << (64 - M_WIDE))
+
+void findPreamble(void)
+{
+	uint64_t lshifter = bigShifter[BIG_SHIFT-1];
+	
+	if ((lshifter & M_MASK) == M_MATCH)
+	{	
+		preambleCtr++;
+		*keptMatch = *bigShifter;
+	}
+}
+
+//------------------------------------------
+void shift640(bool carryIn)
+{
+	for (int j = 0; j < BIG_SHIFT; j++)
+	{
+		bool carryOut;
+		carryOut = !!(bigShifter[j] & 0x8000000000000000);
+		bigShifter[j] <<=1;
+		bigShifter[j] |= carryIn;
+		carryIn = carryOut;
+	}
+}
+//------------------------------------------
+
+
+#define TSLICE (BAUD_4800uS -20)
+
+static volatile uint32_t sharedLastTime;
+
+uint32_t isrGDO0Jitter;
+uint32_t isrGDO2Jitter;
+ 
 ICACHE_RAM_ATTR void goGDO0_IRQ(void)
 {
-	static uint32_t lastime;
-	uint32_t diff;
+	uint32_t delta;
+	
 	uint32_t now = micros();
-	diff = now - lastime;
-	lastime = now;
 	
-	capture(diff);
+	irqGDO0ctr++;
 	
-	irqCnt0++;
+	delta = now - sharedLastTime;
+
+	statsCapture(delta);	// if needed
+
+	if (delta < TSLICE) return;
+
+	sharedLastTime = now; // stops other side from tripping.
+
+	uint8_t pin0 = digitalRead(GDO0);
+	uint8_t pin2 = digitalRead(GDO2);
+	uint32_t end = delta/TSLICE;
+	assert(end);
+
+	for(int j=0; j < end; j++)
+	{
+		shift640(pin0); // what is the order for this?
+		shift640(pin2); // what is the order for this?
+	}
+	
+	isrGDO0Jitter = delta;
+	findPreamble();
+
+	
 	
 }
 //-----------------------------------------------
 
 ICACHE_RAM_ATTR void goGDO2_IRQ(void)
 {
-	irqCnt2++;
-}
+	uint32_t delta;
+	
+	uint32_t now = micros();
+	
+	irqGDO2ctr++;
+	
+	delta = now - sharedLastTime;
+
+	if (delta < TSLICE) return;
+
+	sharedLastTime = now; // stops other side from tripping.
+
+	uint8_t pin0 = digitalRead(GDO0);
+	uint8_t pin2 = digitalRead(GDO2);
+	
+	uint32_t end = delta/TSLICE;
+	assert(end);
+
+	for(int j=0; j < end; j++)
+	{
+		shift640(pin0); // what is the order for this?
+		shift640(pin2); // what is the order for this?
+	}
+	
+	isrGDO2Jitter = delta;
+	findPreamble();
+
+
+}	
+
 //-----------------------------------------------
-bool bTimedOut;
+#if 0
+hw_timer_t *hwTimer = NULL;
+volatile SemaphoreHandle_t timerSemaphore;
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
-hw_timer_t * timer = NULL; // Pointer to the hardware timer
-volatile SemaphoreHandle_t timerSemaphore; // Semaphore to signal the loop from the ISR
+volatile uint32_t isrTimerCnt = 0;
+volatile uint32_t isrTimerJitter = 0;
+uint64_t isrHwTimerValue;
 
-// ISR (Interrupt Service Routine) callback function
-void IRAM_ATTR onTimer() 
+void ARDUINO_ISR_ATTR onTimer() 
 {
-  bTimedOut = true;
-  // Use a semaphore to safely communicate with the loop function
-  xSemaphoreGiveFromISR(timerSemaphore, NULL); 
+  static uint32_t lastTime;
+  uint32_t now;
+  
+  // Increment the counter and set the time of ISR
+  portENTER_CRITICAL_ISR(&timerMux);
+
+  isrTimerCnt = isrTimerCnt + 1;
+  now = micros();
+  isrTimerJitter = now - lastTime;
+  lastTime = now;
+
+  portEXIT_CRITICAL_ISR(&timerMux);
+
+  // Give a semaphore that we can check in the loop
+  xSemaphoreGiveFromISR(timerSemaphore, NULL);
+
+  // It is safe to use digitalRead/Write here if you want to toggle an output
+  
 }
-//-----------------------------------------------
- 
+
+void setupTimers(void)
+{
+	// Create semaphore to inform us when the hwTimer has fired
+	timerSemaphore = xSemaphoreCreateBinary();
+
+	// Set hwTimer frequency to 1Mhz
+	hwTimer = timerBegin(1000000);
+
+	// Attach onTimer function to our hwTimer.
+	timerAttachInterrupt(hwTimer, &onTimer);
+
+	// Set alarm to call onTimer function every second (value in microseconds).
+	// Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
+
+	timerAlarm(hwTimer,
+			   104/2,     // time in uS
+			   true,	// auto reload
+			   0		// forever.
+			   );	
+	Serial.printf("sssssssssssssssssss %d\n", timerGetFrequency(hwTimer));
+
+}
+#endif
+
+//--------------------------------
+
 void layer1(void)
 {
+	
     radio.EnterIdleMode();
 
-    radio.setFreqHz(866887500);
+    //radio.setFreqHz(866887500);
+    radio.setFreqHz(866988000);		// nice looking p25?
 
 	radio.setSyncMode(0);	// no sync RAW
 	radio.setPQT(0);			 
@@ -160,9 +319,9 @@ void layer1(void)
 
     radio.setAGCHysteresis(2); 	// medium
     radio.setAGCWaitTime(16);	// small wait before doing something
-    radio.setAGCFreezeAlgo(0);	// normal agc. adjust as need
+    radio.setAGCFreezeAlgo(3);	// HOLD ! //normal agc. adjust as need
     radio.setAGCLength(16);		// avg 16 samples of amplitude.
-	assert (radio.SpiReadReg(CONFIG_AGCCTRL0) == 0x91);
+	//assert (radio.SpiReadReg(CONFIG_AGCCTRL0) == 0x91);
 
     radio.setCarrierSenseAbs(0);
     radio.setCarrierSenseRel(0);
@@ -174,6 +333,7 @@ void layer1(void)
     radio.setMaxDvgaGain(1);	//first highest gain cannot be used.
 	assert (radio.SpiReadReg(CONFIG_AGCCTRL2) == 0x43);
 
+	radio.setFOClimit(1);	//  rxbw/8  max change
 	
 	radio.enableChangingIRQ_GDO0(true, goGDO0_IRQ);
 	radio.enableChangingIRQ_GDO2(true, goGDO2_IRQ);
@@ -182,10 +342,25 @@ void layer1(void)
 
     while (!Serial.available())
     {
-    	Serial.printf("tmr=%d i0= %d i2=%d\n", bTimedOut, irqCnt0, irqCnt2);
+    	Serial.printf("GDO0= %d GDO2=%d deltaF %f \n", 
+    				   irqGDO0ctr, irqGDO2ctr, radio.getCarrierDev());
+    				   
 		radio.getState(false);
 		show();
     	delay(1000);
+
+		//Serial.printf(FG_YELLOW "Unsigned: %" PRIu64 "\n" FG_DONE, bigShifter[0]);
+		Serial.printf("bigShifter[%d]: 0x%" PRIX64 "\n",BIG_SHIFT-1, bigShifter[BIG_SHIFT-1]);
+		Serial.printf("keptMatch : 0x%" PRIX64 "\n", keptMatch[BIG_SHIFT-1]);
+
+		uint64_t x;
+		x  = M_MATCH;
+		Serial.printf("match     : 0x%" PRIX64 "\n", x);
+		
+		x = M_MASK;
+		Serial.printf("mask      : 0x%" PRIX64 "\n", x);
+
+		//Serial.printf("Signed: %" PRId64 "\n", read64);
 	}
 	Serial.read();
 
@@ -202,10 +377,10 @@ void layer1(void)
 }
 
 /*
- Repeat timer example
+ Repeat hwTimer example
 
- This example shows how to use hardware timer in ESP32. The timer calls onTimer
- function every second. The timer can be stopped with button attached to PIN 0
+ This example shows how to use hardware hwTimer in ESP32. The hwTimer calls onTimer
+ function every second. The hwTimer can be stopped with button attached to PIN 0
  (IO0).
 
  This example code is in the public domain.
@@ -213,17 +388,17 @@ void layer1(void)
 // Stop button is attached to PIN 0 (IO0)
 #define BTN_STOP_ALARM 0
 
-hw_timer_t *timer = NULL;
+hw_timer_t *hwTimer = NULL;
 volatile SemaphoreHandle_t timerSemaphore;
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
-volatile uint32_t isrCounter = 0;
+volatile uint32_t isrTimerCnt = 0;
 volatile uint32_t lastIsrAt = 0;
 
 void ARDUINO_ISR_ATTR onTimer() {
   // Increment the counter and set the time of ISR
   portENTER_CRITICAL_ISR(&timerMux);
-  isrCounter = isrCounter + 1;
+  isrTimerCnt = isrTimerCnt + 1;
   lastIsrAt = millis();
   portEXIT_CRITICAL_ISR(&timerMux);
   // Give a semaphore that we can check in the loop
@@ -237,18 +412,18 @@ void setup() {
   // Set BTN_STOP_ALARM to input mode
   pinMode(BTN_STOP_ALARM, INPUT_PULLUP);
 
-  // Create semaphore to inform us when the timer has fired
+  // Create semaphore to inform us when the hwTimer has fired
   timerSemaphore = xSemaphoreCreateBinary();
 
-  // Set timer frequency to 1Mhz
-  timer = timerBegin(1000000);
+  // Set hwTimer frequency to 1Mhz
+  hwTimer = timerBegin(1000000);
 
-  // Attach onTimer function to our timer.
-  timerAttachInterrupt(timer, &onTimer);
+  // Attach onTimer function to our hwTimer.
+  timerAttachInterrupt(hwTimer, &onTimer);
 
   // Set alarm to call onTimer function every second (value in microseconds).
   // Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
-  timerAlarm(timer, 1000000, true, 0);
+  timerAlarm(hwTimer, 1000000, true, 0);
 }
 
 void loop() {
@@ -257,7 +432,7 @@ void loop() {
     uint32_t isrCount = 0, isrTime = 0;
     // Read the interrupt count and time
     portENTER_CRITICAL(&timerMux);
-    isrCount = isrCounter;
+    isrCount = isrTimerCnt;
     isrTime = lastIsrAt;
     portEXIT_CRITICAL(&timerMux);
     // Print it
@@ -269,11 +444,11 @@ void loop() {
   }
   // If button is pressed
   if (digitalRead(BTN_STOP_ALARM) == LOW) {
-    // If timer is still running
-    if (timer) {
-      // Stop and free timer
-      timerEnd(timer);
-      timer = NULL;
+    // If hwTimer is still running
+    if (hwTimer) {
+      // Stop and free hwTimer
+      timerEnd(hwTimer);
+      hwTimer = NULL;
     }
   }
 }
