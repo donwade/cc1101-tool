@@ -114,7 +114,7 @@ HI_LOW Band_300_348 = { {300000000,   2000} , {  348000000,  3000} };	// made up
 HI_LOW Band_378_464 = { {378000000,   3000} , {  464000000,  4000} };	// made up
 
 // area i want accuracy
-HI_LOW Band_779_899 = { {866087500,  -1000} , {  867887500, -1100} };
+HI_LOW Band_779_899 = { {866087500,  -1700} , {  867837500, -1800} };
 HI_LOW xxxx_779_899 = { {792006330,      0} , {  900000000,     0} };
 
 // don't use this. don't care
@@ -1551,9 +1551,9 @@ void ELECHOUSE_CC1101::setFreqHz(uint32_t mhz, bool bSilent, bool bSkipBandCal)
 	setMHZ((float) mhz/1e6, bSilent, bSkipBandCal);
 }
 
-void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent, bool bSkipBandCal)
+void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent, bool bSkipFreqComp)
 {
-   	uint32_t  temp;
+   	uint32_t  reg;
    	int32_t   tweak;
    	
 	if (mhz == 0.0 ) mhz = gMHz;
@@ -1564,31 +1564,36 @@ void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent, bool bSkipBandCal)
 
 	// addband cal sets too many 'other' registers like pa power etc
 	// always call it. Take away freq cal if needed later.
-   	tweak = AddBandCal(bSilent);
+
+	AddPowerCal(bSilent);   // band causes changes in power settings.
+	
+	//there is a hardware reg that adds to the freq hardware reg.
+	//clear it, we don't use it. It's too course.
+	
+	SpiWriteReg(CONFIG_FSCTRL0, 0); //range is ±202 kHz set to 0
    	
-    if (bSkipBandCal)
+    if (bSkipFreqComp)
     {
-    	//take away any band FREQUENCY aspect, zero it.
-    	//range is ±202 kHz set to 0
-    	SpiWriteReg(CONFIG_FSCTRL0, 0);
 		Serial.printf(FG_RED "%s  requested %9.6f passthru\n" FG_DONE, __FUNCTION__, mhz);
 	}
 	else
 	{
+		tweak = AddFreqComp(bSilent);
+		
 		// tweek in play. Normal operation.
 		Serial.printf(FG_RED "%s  requested %9.6f becomes %9.6f\n" FG_DONE, __FUNCTION__, mhz, mhz + (float) tweak / 1000000.);
 		mhz += (float) tweak / 1000000.;
 	}
 	
 
-	temp = (( mhz  * (float)(1 << 16))/ XTAL_Mhz);
+	reg = (( mhz  * (float)(1 << 16))/ XTAL_Mhz);
 
  	if (!bSilent) Serial.printf(FG_CYAN "%s: final h/w tgt=%7.3f\n"  FG_DONE, 
  			__FUNCTION__, mhz);
 	
-	SpiWriteReg(CONFIG_FREQ2, (temp >>16) & 0xFF);
-	SpiWriteReg(CONFIG_FREQ1, (temp >> 8) & 0xFF);
-	SpiWriteReg(CONFIG_FREQ0,  temp       & 0xFF);
+	SpiWriteReg(CONFIG_FREQ2, (reg >>16) & 0xFF);
+	SpiWriteReg(CONFIG_FREQ1, (reg >> 8) & 0xFF);
+	SpiWriteReg(CONFIG_FREQ0,  reg       & 0xFF);
 	
 
 #if 0
@@ -1607,33 +1612,24 @@ void ELECHOUSE_CC1101::setMHZ(float mhz, bool bSilent, bool bSkipBandCal)
 }
 
 
+
 /****************************************************************
-* FUNCTION NAME:AddBandCal
+* FUNCTION NAME:AddPowerCal
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-int32_t ELECHOUSE_CC1101::AddBandCal(bool bSilent)
+void ELECHOUSE_CC1101::AddPowerCal(bool bSilent)
 {
-	bSilent = false;
+	// not sure what this routine does. 
+	// separated the freq adj part.
 	
-	//CONFIG_FSCTRL0 = add offset to any setMHZ command BY HARDWARE!
 	//CONFIG_TEST0 = no clue. Too obtuse.
-	int32_t retOffset;
-	
-	const int32_t hzPerStep = (XTAL_Mhz * 1e6)/(float) (1<<14);
-	Serial.printf(FG_GREEN "\n%s hz/step = %d\n" FG_DONE, __FUNCTION__, hzPerStep); 
 
 	int32_t freqHz = (uint32_t) (gMHz * 1e6);
 	
     if (gMHz >= 300 && gMHz <= 348)
     {
     	
-        retOffset = REMAP(freqHz, Band_300_348.left.freq, Band_300_348.left.cal, Band_300_348.right.freq, Band_300_348.right.cal);
-
-		if (!bSilent) Serial.printf(FG_GREEN "%s 300->348 a %d hz internal HW retOffset to %f -> %f \n" FG_DONE, __FUNCTION__, retOffset, gMHz, gMHz+ (float) retOffset/1000000. ); 
-        
-        /// DO NOT USE TOO COURSE SpiWriteReg(CONFIG_FSCTRL0, retOffset / hzPerStep);
-
         if (gMHz < 322.88)
         {
             SpiWriteReg(CONFIG_TEST0, 0x0B);
@@ -1652,12 +1648,6 @@ int32_t ELECHOUSE_CC1101::AddBandCal(bool bSilent)
     }
     else if (gMHz >= 378 && gMHz <= 464)
     {
-        retOffset = REMAP(freqHz, Band_378_464.left.freq, Band_378_464.left.cal, Band_378_464.right.freq, Band_378_464.right.cal);
-
-		if (!bSilent) Serial.printf(FG_GREEN "%s 378->464 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, retOffset, gMHz, gMHz+ (float) retOffset/1000000. ); 
-        
-        /// DO NOT USE TOO COURSE SpiWriteReg(CONFIG_FSCTRL0, offset / hzPerStep);
-
         if (gMHz < 430.5)
         {
             SpiWriteReg(CONFIG_TEST0, 0x0B);
@@ -1676,12 +1666,7 @@ int32_t ELECHOUSE_CC1101::AddBandCal(bool bSilent)
     }
     else if (gMHz >= 779 && gMHz < 900)
     {
-    
-		retOffset = REMAP(freqHz, Band_779_899.left.freq, Band_779_899.left.cal, Band_779_899.right.freq, Band_779_899.right.cal);
- 		if (!bSilent) Serial.printf(FG_GREEN "%s 779->899 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, retOffset, gMHz, gMHz+ (float) retOffset/1000000. ); 
-		
-		/// DO NOT USE TOO COURSE SpiWriteReg(CONFIG_FSCTRL0, offset / hzPerStep);
-	
+   
         if (gMHz < 861)
         {
             SpiWriteReg(CONFIG_TEST0, 0x0B);
@@ -1700,15 +1685,6 @@ int32_t ELECHOUSE_CC1101::AddBandCal(bool bSilent)
     }
     else if (gMHz >= 900 && gMHz <= 932)  //opened up a bit from 928
     {
-		retOffset = REMAP(freqHz, Band_900_928.left.freq, Band_900_928.left.cal, Band_900_928.right.freq, Band_900_928.right.cal);
- 		if (!bSilent) 
-		{
-			Serial.printf(FG_GREEN "%s 900->932 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, retOffset, gMHz, gMHz+ (float) retOffset/1000000. ); 
-			////Serial.printf("note: %d %d\n", offset / hzPerStep,  (uint8_t)( retOffset / hzPerStep));
-		}	
-		
-		/// DO NOT USE TOO COURSE SpiWriteReg(CONFIG_FSCTRL0, (uint8_t)(retOffset / hzPerStep));
-		
         SpiWriteReg(CONFIG_TEST0, 0x09);
         int s = radio.SpiReadReg(CONFIG_FSCAL2);
 
@@ -1722,6 +1698,56 @@ int32_t ELECHOUSE_CC1101::AddBandCal(bool bSilent)
 	{
 		Serial.printf(FG_RED "%s:%d *************** cant handle freq %f\n", __FUNCTION__, __LINE__, gMHz);
 		delay(5000);
+		assert(0);
+	}
+}
+
+/****************************************************************
+* FUNCTION NAME:AddBandCal
+* INPUT        :none
+* OUTPUT       :none
+****************************************************************/
+int32_t ELECHOUSE_CC1101::AddFreqComp(bool bSilent)
+{
+	bSilent = false;
+	
+	//CONFIG_FSCTRL0 = add offset to any setMHZ command BY HARDWARE!
+	//CONFIG_TEST0 = no clue. Too obtuse.
+	int32_t retOffset;
+	
+	const int32_t hzPerStep = (XTAL_Mhz * 1e6)/(float) (1<<14);
+	Serial.printf(FG_GREEN "\n%s hz/step = %d\n" FG_DONE, __FUNCTION__, hzPerStep); 
+
+	int32_t freqHz = (uint32_t) (gMHz * 1e6);
+	
+    if (gMHz >= 300 && gMHz <= 348)
+    {
+        retOffset = REMAP(freqHz, Band_300_348.left.freq, Band_300_348.left.cal, Band_300_348.right.freq, Band_300_348.right.cal);
+		if (!bSilent) Serial.printf(FG_GREEN "%s 300->348 a %d hz internal HW retOffset to %f -> %f \n" FG_DONE, __FUNCTION__, retOffset, gMHz, gMHz+ (float) retOffset/1000000. ); 
+        
+    }
+    else if (gMHz >= 378 && gMHz <= 464)
+    {
+        retOffset = REMAP(freqHz, Band_378_464.left.freq, Band_378_464.left.cal, Band_378_464.right.freq, Band_378_464.right.cal);
+		if (!bSilent) Serial.printf(FG_GREEN "%s 378->464 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, retOffset, gMHz, gMHz+ (float) retOffset/1000000. ); 
+        
+    }
+    else if (gMHz >= 779 && gMHz < 900)
+    {
+    
+		retOffset = REMAP(freqHz, Band_779_899.left.freq, Band_779_899.left.cal, Band_779_899.right.freq, Band_779_899.right.cal);
+ 		if (!bSilent) Serial.printf(FG_GREEN "%s 779->899 a %d hz internal HW offset to %f -> %f \n" FG_DONE, __FUNCTION__, retOffset, gMHz, gMHz+ (float) retOffset/1000000. ); 
+		
+    }
+    else if (gMHz >= 900 && gMHz <= 932)  //opened up a bit from 928
+    {
+		retOffset = REMAP(freqHz, Band_900_928.left.freq, Band_900_928.left.cal, Band_900_928.right.freq, Band_900_928.right.cal);
+    }
+	else
+	{
+		Serial.printf(FG_RED "%s:%d *************** cant handle freq %f\n", __FUNCTION__, __LINE__, gMHz);
+		delay(5000);
+		assert(0);
 	}
 
 	return retOffset;

@@ -978,7 +978,7 @@ static void exec(char *input)
     	}
     	else
     	{
-    		Serial.printf("cal-CW requires a start freq\n");
+    		bandCalKnob(radio.getMHZ() * 1000000.);
     	}
     }
 	else if (strcmp_P(cmd, PSTR("cal-pkt")) == 0)

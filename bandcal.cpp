@@ -121,6 +121,12 @@ void bandCalKnob(int32_t startFreq)
 		bCalMode = false;
 		startFreq = -startFreq;
 	}
+
+	// if zero use last running frequency
+	if (startFreq == 0)
+	{
+		startFreq = radio.getMHZ() * 1000000.;
+	}
 	
 	// specified Mhz or Hz?
 	if (startFreq < 1000) startFreq *= 1000000;
