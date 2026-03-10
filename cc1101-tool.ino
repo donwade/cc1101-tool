@@ -968,7 +968,7 @@ static void exec(char *input)
     {
     	txSendByFifos();
     }
-    else if (strcmp_P(cmd, PSTR("cal-CW")) == 0)
+    else if (strcmp_P(cmd, PSTR("cal-cw")) == 0)
     {
     	char *temp = strsep(&cmd_args, " ");
     	if (temp)
