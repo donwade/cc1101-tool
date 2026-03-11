@@ -141,7 +141,6 @@ void findPreamble(void)
 //------------------------------------------
 void shift640(bool carryIn)
 {
-	return;
 	for (int j = 0; j < BIG_SHIFT; j++)
 	{
 		bool carryOut;
