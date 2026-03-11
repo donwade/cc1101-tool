@@ -14,7 +14,8 @@ void beaconByCW (uint32_t freq, bool bCalMode)
 	//normal becon op has NO Cal tweak.
 	radio.setFreqHz(freq, false, bCalMode);  // be quiet and skip band cal.
 	radio.setModulation(2); //ook
-
+	radio.SpiStrobe(CC1101_SCAL);
+	
 	radio.setPA(-30);
     radio.setGDO0_hostpinMode(OUTPUT);
 

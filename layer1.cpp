@@ -141,6 +141,7 @@ void findPreamble(void)
 //------------------------------------------
 void shift640(bool carryIn)
 {
+	return;
 	for (int j = 0; j < BIG_SHIFT; j++)
 	{
 		bool carryOut;
@@ -303,7 +304,7 @@ void layer1(void)
     radio.setPktFormat(3);       // async, raw read pins - fifo disabled
     radio.setLengthConfig(0xFF);
 
-    radio.setBaudRate(9600);
+    radio.setBaudRate(4800);
     radio.setDeviation(1.8); // 1.8k
 
     radio.setModulation(3); //fsk-4
